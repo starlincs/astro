@@ -2,16 +2,29 @@
 
 from pathlib import Path
 
+import pandera.polars as pa
 import polars as pl
 
-from astro import IngestedSource, Pipeline
+from astro import Pipeline
+from astro.pipeline import ExecutionMode, IngestFileSpec
 
 
 class ExamplePipeline(Pipeline):
     name = "example"
-
-    def ingest(self, path: Path) -> list[IngestedSource]:
-        raise NotImplementedError
+    execution_mode = ExecutionMode.SERIAL
+    ingest_files = [
+        IngestFileSpec(
+            name="establishments",
+            source_pattern="edubase*.csv",
+            schema=pa.DataFrameSchema(
+                {
+                    "URN": pa.Column(str),
+                    "EstablishmentName": pa.Column(str),
+                },
+                strict="filter",
+            ),
+        ),
+    ]
 
     def transform(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
         raise NotImplementedError

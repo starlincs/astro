@@ -5,6 +5,10 @@ from typing import Annotated
 
 import typer
 
+from astro.ingest import IngestService, IngestValidationError
+from astro.pipeline.discovery import discover_pipeline, get_pipeline_instance
+from astro.working import SerialIngestConflictError
+
 app = typer.Typer(
     name="astro",
     help="Run and manage CSV import pipelines.",
@@ -12,13 +16,15 @@ app = typer.Typer(
 )
 
 
+def _resolve_pipeline_dir(pipeline_dir: Path | None) -> Path:
+    return pipeline_dir or Path.cwd()
+
+
 @app.command()
 def ingest(
     path: Annotated[
         Path,
-        typer.Argument(
-            help="Path to a CSV file or a directory of files to ingest.",
-        ),
+        typer.Argument(help="Path to a directory of source files to ingest."),
     ],
     pipeline_dir: Annotated[
         Path | None,
@@ -29,8 +35,48 @@ def ingest(
         ),
     ] = None,
 ) -> None:
-    """Ingest a CSV file or directory of files into the pipeline."""
-    typer.echo("ingest: not implemented")
+    """Ingest source files into a new pipeline run."""
+    search_dir = _resolve_pipeline_dir(pipeline_dir)
+    if discover_pipeline(search_dir) is None:
+        typer.secho(f"No pipeline.py found in {search_dir}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+    if not path.exists():
+        typer.secho(f"Source path does not exist: {path}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    if not path.is_dir():
+        typer.secho(
+            f"Source path must be a directory: {path}",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    pipeline = get_pipeline_instance(search_dir)
+    if pipeline is None:
+        typer.secho(
+            "pipeline.py must export a Pipeline instance named 'pipeline'.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    service = IngestService(search_dir, pipeline)
+    try:
+        result = service.ingest(path)
+    except SerialIngestConflictError as error:
+        typer.secho(str(error), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from error
+    except IngestValidationError as error:
+        typer.secho(str(error), fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from error
+    except Exception as error:
+        typer.secho(f"Ingest failed: {error}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from error
+
+    typer.echo(f"Run {result.run_id} created at {result.run_directory}")
+    for file_name in result.ingested_files:
+        typer.echo(f"  ingested {file_name}")
 
 
 @app.command()

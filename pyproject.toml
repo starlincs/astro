@@ -9,6 +9,7 @@ description = "CLI tool and library for CSV import pipelines"
 requires-python = ">=3.11"
 dependencies = [
     "polars>=1.0",
+    "pyarrow>=16.0",
     "pydantic>=2.0",
     "pandera>=0.20",
     "typer>=0.12",
@@ -40,7 +41,8 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "RUF012"]
+"examples/**" = ["RUF012"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

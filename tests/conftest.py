@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandera.polars as pa
 import pytest
 from typer.testing import CliRunner
+
+from astro.pipeline import IngestFileSpec
 
 
 @pytest.fixture
@@ -14,22 +17,50 @@ def cli_runner() -> CliRunner:
 
 
 @pytest.fixture
-def pipeline_directory(tmp_path: Path) -> Path:
+def sample_ingest_spec() -> IngestFileSpec:
+    return IngestFileSpec(
+        name="establishments",
+        source_pattern="edubase*.csv",
+        schema=pa.DataFrameSchema(
+            {
+                "URN": pa.Column(str),
+                "EstablishmentName": pa.Column(str),
+            },
+            strict="filter",
+        ),
+    )
+
+
+@pytest.fixture
+def pipeline_directory(tmp_path: Path, sample_ingest_spec: IngestFileSpec) -> Path:
     pipeline_path = tmp_path / "pipeline.py"
     pipeline_path.write_text(
         """
 from pathlib import Path
 
+import pandera.polars as pa
 import polars as pl
 
-from astro import IngestedSource, Pipeline
+from astro import Pipeline
+from astro.pipeline import ExecutionMode, IngestFileSpec
 
 
 class TestPipeline(Pipeline):
     name = "test-pipeline"
-
-    def ingest(self, path: Path) -> list[IngestedSource]:
-        return [IngestedSource(path=path, data=pl.DataFrame({"value": [1]}))]
+    execution_mode = ExecutionMode.SERIAL
+    ingest_files = [
+        IngestFileSpec(
+            name="establishments",
+            source_pattern="edubase*.csv",
+            schema=pa.DataFrameSchema(
+                {
+                    "URN": pa.Column(str),
+                    "EstablishmentName": pa.Column(str),
+                },
+                strict="filter",
+            ),
+        ),
+    ]
 
     def transform(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
         return data
@@ -43,6 +74,17 @@ pipeline = TestPipeline()
         encoding="utf-8",
     )
     return tmp_path
+
+
+@pytest.fixture
+def source_directory(tmp_path: Path) -> Path:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "edubase20260522.csv").write_text(
+        "URN,EstablishmentName\n100001,Example School\n",
+        encoding="utf-8",
+    )
+    return source_dir
 
 
 @pytest.fixture

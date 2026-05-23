@@ -4,23 +4,28 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandera.polars as pa
 import polars as pl
+import pytest
 
-from astro import IngestedSource, Pipeline
+from astro import Pipeline
+from astro.pipeline import ExecutionMode, IngestFileSpec
 
 
 class RecordingPipeline(Pipeline):
     name = "recording"
+    execution_mode = ExecutionMode.PARALLEL
+    ingest_files = [
+        IngestFileSpec(
+            name="records",
+            source_pattern="*.csv",
+            schema=pa.DataFrameSchema({"value": pa.Column(str)}, strict="filter"),
+        ),
+    ]
 
     def __init__(self) -> None:
         self.transform_calls: list[Path] = []
         self.validate_calls: list[Path] = []
-
-    def ingest(self, path: Path) -> list[IngestedSource]:
-        return [
-            IngestedSource(path=path / "a.csv", data=pl.DataFrame({"value": [1]})),
-            IngestedSource(path=path / "b.csv", data=pl.DataFrame({"value": [2]})),
-        ]
 
     def transform(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
         self.transform_calls.append(source)
@@ -31,13 +36,20 @@ class RecordingPipeline(Pipeline):
         return data.with_columns(pl.lit("validated").alias("status"))
 
 
-def test_pipeline_run_processes_each_source_independently(tmp_path: Path) -> None:
+def test_pipeline_run_is_not_implemented_yet() -> None:
     pipeline = RecordingPipeline()
+    with pytest.raises(NotImplementedError, match="astro ingest"):
+        pipeline.run(Path("/tmp/source"))
 
-    results = pipeline.run(tmp_path)
 
-    assert len(results) == 2
-    assert {result.path.name for result in results} == {"a.csv", "b.csv"}
-    assert pipeline.transform_calls == [tmp_path / "a.csv", tmp_path / "b.csv"]
-    assert pipeline.validate_calls == [tmp_path / "a.csv", tmp_path / "b.csv"]
-    assert results[0].data.columns == ["value", "stage", "status"]
+def test_pipeline_transform_and_validate_can_be_called_directly() -> None:
+    pipeline = RecordingPipeline()
+    source = Path("/tmp/a.csv")
+    data = pl.DataFrame({"value": ["1"]})
+
+    transformed = pipeline.transform(data, source)
+    validated = pipeline.validate(transformed, source)
+
+    assert pipeline.transform_calls == [source]
+    assert pipeline.validate_calls == [source]
+    assert validated.columns == ["value", "stage", "status"]

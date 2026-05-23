@@ -15,3 +15,8 @@ def test_pipeline_store_custom_db_path(tmp_path: Path) -> None:
     custom_path = tmp_path / "custom" / "stats.db"
     store = PipelineStore(db_path=custom_path)
     assert store.db_path == custom_path
+
+
+def test_pipeline_store_list_runs_returns_empty_when_uninitialized(tmp_path: Path) -> None:
+    store = PipelineStore(tmp_path / ".astro" / "stats.db")
+    assert store.list_runs() == []
