@@ -1,0 +1,13 @@
+---
+description: Search for packages to help
+alwaysApply: true
+---
+
+# Search for helpful packages
+
+Before changing or planning changes to `src/astro/`:
+
+1. Search for Python packages which will help fulfill your objective vs. writing your own code
+2. Once you identify packages that will be helpful to this implementation search for them on pypi and check that they are a) updated within the last 12 months and b) well used (check for number of downloads and number of stars)
+3. The above aren't hard rules - basically assess how good the package is likely to be and prefer packages which are better maintained and used (and outright dont make use of packages with minimal maintenance/use)
+4. If you are unsure, ask the user
