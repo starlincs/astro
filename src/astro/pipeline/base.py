@@ -13,7 +13,13 @@ import polars as pl
 from astro.filter.types import FilterFn
 from astro.pipeline.files import AstroFile, AstroFileSpec
 from astro.pipeline.models import ExecutionMode, IngestFileSpec
-from astro.pipeline.steps import StepContext, StepDefinition, StepFn, slugify_step_label
+from astro.pipeline.steps import (
+    StepContext,
+    StepDefinition,
+    StepFn,
+    StepKind,
+    slugify_step_label,
+)
 
 
 @dataclass(frozen=True)
@@ -57,6 +63,7 @@ class Pipeline(ABC):
         *,
         step_id: str | None = None,
         depends_on: Sequence[str] | None = None,
+        kind: StepKind = StepKind.STEP,
     ) -> None:
         if not files:
             raise ValueError("Each step must reference at least one AstroFileSpec.")
@@ -91,6 +98,7 @@ class Pipeline(ABC):
                 fn=fn,
                 file_specs=tuple(files),
                 depends_on=dependency_ids,
+                kind=kind,
             )
         )
 
@@ -114,6 +122,7 @@ class Pipeline(ABC):
             files,
             step_id=step_id,
             depends_on=depends_on,
+            kind=StepKind.FILTER,
         )
 
     @property

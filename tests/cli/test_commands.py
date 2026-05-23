@@ -156,3 +156,27 @@ def test_cleanup_all_flag_stub(cli_runner: CliRunner) -> None:
     result = cli_runner.invoke(app, ["cleanup", "--all"])
     assert result.exit_code == 0
     assert "not implemented" in result.output.lower()
+
+
+def test_describe_command_renders_pipeline_flow(
+    cli_runner: CliRunner,
+    pipeline_directory: Path,
+) -> None:
+    result = cli_runner.invoke(
+        app,
+        ["describe", "--pipeline-dir", str(pipeline_directory)],
+    )
+    assert result.exit_code == 0
+    assert "test-pipeline (serial)" in result.output
+    assert "Ingest" in result.output
+    assert "No-op" in result.output
+    assert "──►" in result.output
+
+
+def test_describe_command_reports_missing_pipeline(cli_runner: CliRunner, tmp_path: Path) -> None:
+    result = cli_runner.invoke(
+        app,
+        ["describe", "--pipeline-dir", str(tmp_path)],
+    )
+    assert result.exit_code == 1
+    assert "No pipeline.py found" in result.output

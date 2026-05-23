@@ -16,6 +16,7 @@ astro ingest path/to/data/
 astro run
 astro run --mode cli
 astro run --run-id abc12
+astro describe
 astro list
 astro cleanup
 ```

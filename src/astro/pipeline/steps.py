@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
+from enum import StrEnum
 from pathlib import Path
 
 from astro.pipeline.files import AstroFile, AstroFileSpec
@@ -17,6 +18,11 @@ StepFn = Callable[["StepContext", list[AstroFile]], None]
 ProgressCallback = Callable[[float | None], None]
 
 
+class StepKind(StrEnum):
+    STEP = "step"
+    FILTER = "filter"
+
+
 @dataclass(frozen=True)
 class StepDefinition:
     step_id: str
@@ -24,6 +30,7 @@ class StepDefinition:
     fn: StepFn
     file_specs: tuple[AstroFileSpec, ...]
     depends_on: tuple[str, ...]
+    kind: StepKind = field(default=StepKind.STEP)
 
 
 @dataclass(frozen=True)

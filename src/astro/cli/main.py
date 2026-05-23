@@ -11,6 +11,7 @@ import typer
 from rich.live import Live
 
 from astro.cli.display.dashboard import RunDashboard
+from astro.cli.display.flow import render_flow_diagram
 from astro.cli.display.steps import build_run_tracker
 from astro.cli.logging import (
     LogMode,
@@ -238,6 +239,31 @@ def run(
     except Exception as error:
         with setup_astro_logging(LogMode.CONSOLE_ONLY):
             _exit_with_logged_error(f"Run failed: {error}")
+
+
+@app.command()
+def describe(
+    pipeline_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--pipeline-dir",
+            "-C",
+            help="Directory containing pipeline.py. Defaults to the current directory.",
+        ),
+    ] = None,
+) -> None:
+    """Display the pipeline steps as a flow diagram."""
+    search_dir = _resolve_pipeline_dir(pipeline_dir)
+    with setup_astro_logging(LogMode.CONSOLE_ONLY):
+        if discover_pipeline(search_dir) is None:
+            _exit_with_logged_error(f"No pipeline.py found in {search_dir}")
+
+        pipeline = get_pipeline_instance(search_dir)
+        if pipeline is None:
+            _exit_with_logged_error("pipeline.py must export a Pipeline instance named 'pipeline'.")
+        assert pipeline is not None
+
+        typer.echo(render_flow_diagram(pipeline))
 
 
 @app.command(name="list")

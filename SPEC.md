@@ -139,6 +139,7 @@ Each run directory may contain an `astro.log` file alongside `manifest.json`.
 |---------|----------------|--------------|
 | `astro ingest` | yes | `.working/{run_id}/astro.log` (created after run allocation) |
 | `astro run` | dashboard (default) or plain logs (`--mode cli`) | same path; sessions append with a separator |
+| `astro describe` | yes | no |
 | `astro list`, `astro cleanup` | yes | no |
 
 Each log-file session starts with a timestamp separator:
@@ -408,6 +409,7 @@ Resolution is vectorized with Polars joins and expressions. UUID assignment loop
 |---------|---------|
 | `astro ingest SOURCE_DIR` | Create a run, validate source files, materialize Parquet |
 | `astro run [--run-id ID] [--mode dashboard\|cli]` | Execute registered pipeline steps on an ingested run |
+| `astro describe` | Display the pipeline steps as a terminal flow diagram |
 | `astro list` | List registered pipelines and their statistics (not implemented) |
 | `astro cleanup [--all]` | Remove stored pipeline data (not implemented) |
 
@@ -423,4 +425,4 @@ Before merging or completing work:
 
 ## Current status
 
-`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps with dashboard or CLI display, row quarantine, row filtering, retry for quarantined runs, and automatic statistics recording. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.
+`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps with dashboard or CLI display, row quarantine, row filtering, retry for quarantined runs, and automatic statistics recording. `astro describe` prints a terminal flow diagram of ingest and run steps. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.
