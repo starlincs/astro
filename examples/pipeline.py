@@ -1,6 +1,7 @@
 """Example pipeline definition for an external project repository."""
 
 import pandera.polars as pa
+import polars as pl
 
 from astro import AstroFileSpec, Pipeline
 from astro.pipeline import ExecutionMode, IngestFileSpec
@@ -10,6 +11,10 @@ from astro.pipeline.steps import StepContext
 
 class EstablishmentsFile(AstroFileSpec):
     ingest_name = "establishments"
+
+
+def remove_closed(_dataframe: pl.DataFrame) -> pl.DataFrame:
+    return _dataframe.filter(pl.col("EstablishmentName").str.contains("Closed"))
 
 
 def step_copy_establishments(_ctx: StepContext, files: list[AstroFile]) -> None:
@@ -35,10 +40,12 @@ class ExamplePipeline(Pipeline):
     ]
 
     def configure_steps(self) -> None:
+        self.add_filter("Remove closed establishments", remove_closed, [EstablishmentsFile()])
         self.add_step(
             "Copy establishments to processed",
             step_copy_establishments,
             [EstablishmentsFile()],
+            depends_on=["remove-closed-establishments"],
         )
 
 

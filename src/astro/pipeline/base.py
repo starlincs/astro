@@ -10,9 +10,10 @@ from typing import ClassVar
 
 import polars as pl
 
-from astro.pipeline.files import AstroFileSpec
+from astro.filter.types import FilterFn
+from astro.pipeline.files import AstroFile, AstroFileSpec
 from astro.pipeline.models import ExecutionMode, IngestFileSpec
-from astro.pipeline.steps import StepDefinition, StepFn, slugify_step_label
+from astro.pipeline.steps import StepContext, StepDefinition, StepFn, slugify_step_label
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,28 @@ class Pipeline(ABC):
                 file_specs=tuple(files),
                 depends_on=dependency_ids,
             )
+        )
+
+    def add_filter(
+        self,
+        label: str,
+        fn: FilterFn,
+        files: Sequence[AstroFileSpec],
+        *,
+        step_id: str | None = None,
+        depends_on: Sequence[str] | None = None,
+    ) -> None:
+        from astro.filter.executor import apply_filter_step
+
+        def filter_step(context: StepContext, step_files: list[AstroFile]) -> None:
+            apply_filter_step(context, step_files, fn)
+
+        self.add_step(
+            label,
+            filter_step,
+            files,
+            step_id=step_id,
+            depends_on=depends_on,
         )
 
     @property

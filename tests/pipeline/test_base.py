@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandera.polars as pa
+import polars as pl
 import pytest
 
 from astro import Pipeline
@@ -47,3 +48,19 @@ def test_pipeline_registers_run_steps() -> None:
 
     assert len(pipeline.steps) == 1
     assert pipeline.steps[0].step_id == "record"
+
+
+class FilteringPipeline(RecordingPipeline):
+    def configure_steps(self) -> None:
+        self.add_filter(
+            "Remove closed",
+            lambda dataframe: dataframe.filter(pl.col("value") == "closed"),
+            [EstablishmentsFile()],
+        )
+
+
+def test_pipeline_registers_filter_steps() -> None:
+    pipeline = FilteringPipeline()
+
+    assert len(pipeline.steps) == 1
+    assert pipeline.steps[0].step_id == "remove-closed"

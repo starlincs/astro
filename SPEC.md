@@ -49,7 +49,7 @@ Pipelines declare ingest configuration and register ordered run steps:
 
 - **`ingest_files`** — expected source file patterns and Pandera schemas for CLI ingest
 - **`execution_mode`** — `serial` or `parallel` ingest concurrency rules
-- **`configure_steps()`** — register run steps via `add_step(label, fn, files, depends_on=[...])`
+- **`configure_steps()`** — register run steps via `add_step(label, fn, files, depends_on=[...])` or filter steps via `add_filter(label, fn, files, depends_on=[...])`
 - **`AstroFileSpec`** — per-file configuration container referenced by steps
 - **`AstroFile`** — runtime wrapper hydrated during `astro run` with explicit I/O methods
 
@@ -222,6 +222,53 @@ For each quarantined step only:
 
 Previously completed steps are skipped. Previously blocked or pending dependent steps run once their dependencies are `complete`.
 
+### Row filtering
+
+Filter steps remove rows from one or more files using author-defined logic. Astro applies the filter boilerplate: split input rows, save kept rows in place, persist removed rows for audit, and record statistics. Filter steps always complete normally (unlike quarantine).
+
+#### Run directory layout
+
+```text
+.working/{run_id}/
+  ingested/
+  filtered/{step_id}/{ingest_name}.parquet  # rows removed by that filter step
+  manifest.json
+```
+
+Filtered Parquet rows use the same schema as the source file (no extra framework columns).
+
+#### Pipeline API
+
+Register a filter with `add_filter`. The author function receives the input `pl.DataFrame` and returns **removed rows only**:
+
+```python
+def remove_closed(df: pl.DataFrame) -> pl.DataFrame:
+    return df.filter(pl.col("status") == "closed")
+
+class ExamplePipeline(Pipeline):
+    def configure_steps(self) -> None:
+        self.add_filter("Remove closed schools", remove_closed, [EstablishmentsFile()])
+        self.add_step(
+            "Transform open schools",
+            step_transform,
+            [EstablishmentsFile()],
+            depends_on=["remove-closed-schools"],
+        )
+```
+
+For each file in the step, Astro:
+
+1. Loads the current active parquet
+2. Calls the filter function to obtain removed rows
+3. Validates removed rows are a subset of the input (matching columns; semi-join check)
+4. Writes kept rows back with `save_in_place()`
+5. Writes removed rows to `filtered/{step_id}/{ingest_name}.parquet`
+6. Records `rows_filtered` and `rows_kept` statistics
+
+**Duplicate rows:** splitting uses joins on all columns, so identical duplicate rows may not partition cleanly if the filter returns fewer copies than exist in the input.
+
+Filter steps do not affect run quarantine/retry behaviour; removed rows remain in `filtered/` for reference only.
+
 ### Statistics
 
 Pipeline runs record numeric statistics scoped to a **run**, **file**, or **step**, keyed by an **action** name. Each update:
@@ -266,6 +313,8 @@ def step_transform(ctx: StepContext, files: list[AstroFile]) -> None:
 | Ingest | run | `ingest_failed` | On ingest failure |
 | Run | step | `duration_ms` | After each step executes |
 | Run | step | `rows_quarantined` | When a step quarantines rows |
+| Run | file | `rows_filtered`, `rows_kept` | After a filter step processes a file |
+| Run | step | `rows_filtered` | After a filter step (total removed across files) |
 | Run | run | `steps_completed` | When run finishes |
 | Run | run | `duration_ms` | When run finishes |
 | Run | run | `steps_quarantined` | When run finishes with quarantined steps |
@@ -374,4 +423,4 @@ Before merging or completing work:
 
 ## Current status
 
-`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps with dashboard or CLI display, row quarantine, retry for quarantined runs, and automatic statistics recording. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.
+`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps with dashboard or CLI display, row quarantine, row filtering, retry for quarantined runs, and automatic statistics recording. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.
