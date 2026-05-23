@@ -114,16 +114,10 @@ class RunDashboard:
             style = "yellow"
         else:
             style = "white"
-        formatter = self.buffer.formatter
-        timestamp = (
-            formatter.formatTime(record, "%H:%M:%S") if formatter is not None else "--:--:--"
-        )
-        level = record.levelname
-        line = f"{timestamp} {level:<8} {message}"
         max_width = self._log_line_max_width()
-        if len(line) > max_width:
-            line = line[: max_width - 1] + "…"
-        return Text(line, style=style)
+        if len(message) > max_width:
+            message = message[: max_width - 1] + "…"
+        return Text(message, style=style)
 
     def _build_status_panel(self) -> Panel:
         message = self.tracker.status_message or "Ready"
