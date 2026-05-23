@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from astro.pipeline.base import Pipeline
+from astro.pipeline.models import StepExecutionMode
 from astro.pipeline.steps import StepDefinition
 
 INGEST_NODE_ID = "ingest"
@@ -85,12 +86,19 @@ def build_flow_graph(pipeline: Pipeline) -> FlowGraph:
 def render_flow_diagram(pipeline: Pipeline) -> str:
     """Render the pipeline workflow with dependency connections."""
     graph = build_flow_graph(pipeline)
-    header = f"{pipeline.name} ({pipeline.execution_mode.value})"
+    header = _pipeline_flow_header(pipeline)
     if _is_linear_chain(graph.layers):
         body = _render_linear_chain(graph.layers)
     else:
         body = _render_branching_workflow(graph)
     return "\n".join([header, "", *body])
+
+
+def _pipeline_flow_header(pipeline: Pipeline) -> str:
+    parts = [pipeline.execution_mode.value]
+    if pipeline.step_execution_mode != StepExecutionMode.SERIAL:
+        parts.append(f"{pipeline.step_execution_mode.value} steps")
+    return f"{pipeline.name} ({', '.join(parts)})"
 
 
 def _is_linear_chain(layers: tuple[tuple[FlowNode, ...], ...]) -> bool:

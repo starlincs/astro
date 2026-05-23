@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -12,9 +14,11 @@ from pathlib import Path
 from astro.cli.display.steps import StepTracker, build_run_tracker
 from astro.pipeline.base import Pipeline
 from astro.pipeline.files import AstroFile
+from astro.pipeline.models import StepExecutionMode
 from astro.pipeline.steps import StepContext, StepDefinition
 from astro.quarantine.collector import StepQuarantine
 from astro.quarantine.store import QuarantineStore
+from astro.run.context import RunExecutionContext, RunProgress, StepExecutionOutcome
 from astro.stats.recorder import StatisticsRecorder
 from astro.storage.sqlite import PipelineStore
 from astro.working.manifest import RunManifest, RunStatus, StepRunStatus
@@ -62,10 +66,11 @@ class RunService:
         quarantine_store = QuarantineStore(run_directory)
         step_logger = logging.getLogger("astro.run.steps")
         is_retry = manifest.status in {RunStatus.QUARANTINED, RunStatus.FAILED}
-        steps_completed = sum(
-            1 for record in manifest.step_states if record.status == StepRunStatus.COMPLETE
+        progress = RunProgress(
+            steps_completed=sum(
+                1 for record in manifest.step_states if record.status == StepRunStatus.COMPLETE
+            )
         )
-        stop_reason: str | None = None
         run_started_at = time.monotonic()
 
         def report_progress(progress_percent: float | None) -> None:
@@ -75,11 +80,72 @@ class RunService:
 
         self._initialize_step_states(pipeline, manifest)
 
-        for step in pipeline.steps:
-            current_status = manifest.step_status_map().get(step.step_id, StepRunStatus.PENDING)
+        file_locks = {ingest_name: threading.Lock() for ingest_name in file_pool}
+        ctx = RunExecutionContext(
+            pipeline_dir=pipeline_dir,
+            pipeline=pipeline,
+            run_directory=run_directory,
+            manifest=manifest,
+            run_manager=run_manager,
+            store=store,
+            stats_recorder=stats_recorder,
+            active_tracker=active_tracker,
+            file_pool=file_pool,
+            quarantine_store=quarantine_store,
+            step_logger=step_logger,
+            is_retry=is_retry,
+            report_progress=report_progress,
+            progress_callback=progress_callback,
+            run_started_at=run_started_at,
+            file_locks=file_locks,
+        )
+
+        if pipeline.step_execution_mode == StepExecutionMode.PARALLEL:
+            from astro.run.scheduler import ParallelStepScheduler
+
+            ParallelStepScheduler(self, ctx, progress).run()
+        else:
+            self._run_serial(ctx, progress)
+
+        if progress.hard_error is not None or progress.stop_reason:
+            final_status = RunStatus.FAILED
+        else:
+            final_status = self._derive_run_status(manifest)
+        self._persist_manifest(run_manager, store, run_directory, manifest, final_status)
+        self._record_run_statistics(
+            stats_recorder,
+            manifest,
+            steps_completed=progress.steps_completed,
+            run_started_at=run_started_at,
+        )
+
+        if final_status == RunStatus.QUARANTINED:
+            active_tracker.set_status_message("Run quarantined")
+        elif final_status == RunStatus.FAILED:
+            active_tracker.set_status_message(progress.stop_reason or "Run failed")
+        else:
+            active_tracker.set_status_message("Run completed")
+        active_tracker.set_progress_percent(None)
+        logger.info("Run %s finished with status %s", manifest.run_id, final_status.value)
+
+        if progress.hard_error is not None:
+            raise progress.hard_error
+
+        return RunResult(
+            run_id=manifest.run_id,
+            run_directory=run_directory,
+            steps_completed=progress.steps_completed,
+        )
+
+    def _run_serial(self, ctx: RunExecutionContext, progress: RunProgress) -> None:
+        for step in ctx.pipeline.steps:
+            if progress.stop_reason:
+                break
+
+            current_status = ctx.manifest.step_status_map().get(step.step_id, StepRunStatus.PENDING)
             if current_status == StepRunStatus.COMPLETE:
                 continue
-            if is_retry and current_status not in {
+            if ctx.is_retry and current_status not in {
                 StepRunStatus.QUARANTINED,
                 StepRunStatus.PENDING,
                 StepRunStatus.BLOCKED,
@@ -87,127 +153,147 @@ class RunService:
                 continue
 
             try:
-                self._check_dependencies(step, manifest)
+                self.check_dependencies(step, ctx.manifest)
             except DependencyQuarantinedError as error:
-                manifest.upsert_step_state(step.step_id, StepRunStatus.BLOCKED, detail=str(error))
-                active_tracker.mark_failed(step.step_id, detail=str(error))
-                stop_reason = str(error)
+                with ctx.state_lock:
+                    ctx.manifest.upsert_step_state(
+                        step.step_id,
+                        StepRunStatus.BLOCKED,
+                        detail=str(error),
+                    )
+                    ctx.active_tracker.mark_failed(step.step_id, detail=str(error))
+                progress.stop_reason = str(error)
                 break
 
-            step_files = [
-                self._resolve_step_file(file_spec, file_pool, manifest, run_directory)
-                for file_spec in step.file_specs
-            ]
+            outcome = self.execute_step(step, ctx)
+            if outcome.hard_error is not None:
+                progress.hard_error = outcome.hard_error
+                break
+            if outcome.dependency_blocked_detail is not None:
+                progress.stop_reason = outcome.dependency_blocked_detail
+                break
+            progress.steps_completed += outcome.steps_completed_delta
+
+    def execute_step(self, step: StepDefinition, ctx: RunExecutionContext) -> StepExecutionOutcome:
+        current_status = ctx.manifest.step_status_map().get(step.step_id, StepRunStatus.PENDING)
+        step_files = [
+            self._resolve_step_file(file_spec, ctx.file_pool, ctx.manifest, ctx.run_directory)
+            for file_spec in step.file_specs
+        ]
+
+        with ctx.state_lock:
             if current_status == StepRunStatus.QUARANTINED:
-                self._prepare_step_retry(step, step_files, quarantine_store)
+                self._prepare_step_retry(step, step_files, ctx.quarantine_store)
+            self._capture_snapshots(step, step_files, ctx.quarantine_store)
+            ctx.active_tracker.mark_running(step.step_id)
+            ctx.active_tracker.set_status_message(step.label)
+            ctx.active_tracker.set_progress_percent(None)
+            if ctx.progress_callback is not None:
+                ctx.progress_callback()
 
-            self._capture_snapshots(step, step_files, quarantine_store)
-            active_tracker.mark_running(step.step_id)
-            active_tracker.set_status_message(step.label)
-            active_tracker.set_progress_percent(None)
-            if progress_callback is not None:
-                progress_callback()
+        quarantine = StepQuarantine(ctx.run_directory, step.step_id)
+        step_stats = ctx.stats_recorder.for_step(step.step_id)
+        context = StepContext(
+            pipeline_dir=ctx.pipeline_dir,
+            run_directory=ctx.run_directory,
+            run_id=ctx.manifest.run_id,
+            run_date=date.today(),
+            step_id=step.step_id,
+            logger=ctx.step_logger,
+            report_progress=ctx.report_progress,
+            quarantine=quarantine,
+            stats=step_stats,
+        )
 
-            quarantine = StepQuarantine(run_directory, step.step_id)
-            step_stats = stats_recorder.for_step(step.step_id)
-            context = StepContext(
-                pipeline_dir=pipeline_dir,
-                run_directory=run_directory,
-                run_id=manifest.run_id,
-                run_date=date.today(),
-                step_id=step.step_id,
-                logger=step_logger,
-                report_progress=report_progress,
-                quarantine=quarantine,
-                stats=step_stats,
-            )
+        ingest_names = sorted({file_spec.__class__.ingest_name for file_spec in step.file_specs})
+        file_locks = [ctx.file_locks[ingest_name] for ingest_name in ingest_names]
 
-            try:
-                logger.info("Running step %s", step.label)
-                step_started_at = time.monotonic()
+        try:
+            logger.info("Running step %s", step.label)
+            step_started_at = time.monotonic()
+            with ExitStack() as lock_stack:
+                for file_lock in file_locks:
+                    lock_stack.enter_context(file_lock)
                 step.fn(context, step_files)
-                step_stats.record_step(
-                    "duration_ms",
-                    (time.monotonic() - step_started_at) * 1000,
+            step_stats.record_step(
+                "duration_ms",
+                (time.monotonic() - step_started_at) * 1000,
+            )
+        except Exception as error:
+            step_stats.record_step(
+                "duration_ms",
+                (time.monotonic() - step_started_at) * 1000,
+            )
+            logger.error("Run failed during step %s: %s", step.label, error)
+            with ctx.state_lock:
+                ctx.manifest.upsert_step_state(
+                    step.step_id,
+                    StepRunStatus.FAILED,
+                    detail=str(error),
                 )
-            except Exception as error:
-                step_stats.record_step(
-                    "duration_ms",
-                    (time.monotonic() - step_started_at) * 1000,
-                )
-                logger.error("Run failed during step %s: %s", step.label, error)
-                manifest.upsert_step_state(step.step_id, StepRunStatus.FAILED, detail=str(error))
-                active_tracker.mark_failed(step.step_id, detail=str(error))
-                active_tracker.set_status_message(f"Failed: {error}")
+                ctx.active_tracker.mark_failed(step.step_id, detail=str(error))
+                ctx.active_tracker.set_status_message(f"Failed: {error}")
                 self._persist_manifest(
-                    run_manager,
-                    store,
-                    run_directory,
-                    manifest,
+                    ctx.run_manager,
+                    ctx.store,
+                    ctx.run_directory,
+                    ctx.manifest,
                     RunStatus.FAILED,
                 )
-                self._record_run_statistics(
-                    stats_recorder,
-                    manifest,
-                    steps_completed=steps_completed,
-                    run_started_at=run_started_at,
-                )
-                raise
+            return StepExecutionOutcome(step_id=step.step_id, hard_error=error)
 
-            if quarantine.has_quarantined_rows:
-                quarantine_row_count = sum(
-                    quarantine_store.read_rows(
-                        quarantine_store.quarantine_path(
-                            step.step_id,
-                            file.spec.__class__.ingest_name,
-                        )
-                    ).height
-                    for file in step_files
-                )
-                step_stats.record_step("rows_quarantined", quarantine_row_count)
-                manifest.upsert_step_state(
+        if quarantine.has_quarantined_rows:
+            quarantine_row_count = sum(
+                ctx.quarantine_store.read_rows(
+                    ctx.quarantine_store.quarantine_path(
+                        step.step_id,
+                        file.spec.__class__.ingest_name,
+                    )
+                ).height
+                for file in step_files
+            )
+            step_stats.record_step("rows_quarantined", quarantine_row_count)
+            with ctx.state_lock:
+                ctx.manifest.upsert_step_state(
                     step.step_id,
                     StepRunStatus.QUARANTINED,
                     detail="Rows quarantined",
                 )
-                active_tracker.mark_quarantined(step.step_id, detail="Rows quarantined")
-            else:
-                manifest.upsert_step_state(step.step_id, StepRunStatus.COMPLETE)
-                active_tracker.mark_complete(step.step_id)
-                steps_completed += 1
-
-            self._persist_manifest(
-                run_manager,
-                store,
-                run_directory,
-                manifest,
-                self._derive_run_status(manifest),
-            )
-            if progress_callback is not None:
-                progress_callback()
-
-        final_status = RunStatus.FAILED if stop_reason else self._derive_run_status(manifest)
-        self._persist_manifest(run_manager, store, run_directory, manifest, final_status)
-        self._record_run_statistics(
-            stats_recorder,
-            manifest,
-            steps_completed=steps_completed,
-            run_started_at=run_started_at,
-        )
-
-        if final_status == RunStatus.QUARANTINED:
-            active_tracker.set_status_message("Run quarantined")
-        elif final_status == RunStatus.FAILED:
-            active_tracker.set_status_message(stop_reason or "Run failed")
+                ctx.active_tracker.mark_quarantined(step.step_id, detail="Rows quarantined")
         else:
-            active_tracker.set_status_message("Run completed")
-        active_tracker.set_progress_percent(None)
-        logger.info("Run %s finished with status %s", manifest.run_id, final_status.value)
-        return RunResult(
-            run_id=manifest.run_id,
-            run_directory=run_directory,
-            steps_completed=steps_completed,
+            with ctx.state_lock:
+                ctx.manifest.upsert_step_state(step.step_id, StepRunStatus.COMPLETE)
+                ctx.active_tracker.mark_complete(step.step_id)
+
+        with ctx.state_lock:
+            self._persist_manifest(
+                ctx.run_manager,
+                ctx.store,
+                ctx.run_directory,
+                ctx.manifest,
+                self._derive_run_status(ctx.manifest),
+            )
+            if ctx.progress_callback is not None:
+                ctx.progress_callback()
+
+        return StepExecutionOutcome(
+            step_id=step.step_id,
+            steps_completed_delta=0 if quarantine.has_quarantined_rows else 1,
         )
+
+    def check_dependencies(self, step: StepDefinition, manifest: RunManifest) -> None:
+        statuses = manifest.step_status_map()
+        for dependency_id in step.depends_on:
+            dependency_status = statuses.get(dependency_id, StepRunStatus.PENDING)
+            if dependency_status == StepRunStatus.QUARANTINED:
+                raise DependencyQuarantinedError(
+                    f"Step {step.step_id} blocked by quarantined dependency: {dependency_id}"
+                )
+            if dependency_status != StepRunStatus.COMPLETE:
+                joined = ", ".join(step.depends_on)
+                raise RuntimeError(
+                    f"Step {step.step_id} blocked by incomplete dependencies: {joined}"
+                )
 
     def _can_process_run(self, manifest: RunManifest) -> bool:
         if manifest.status == RunStatus.INGESTED:
@@ -225,20 +311,6 @@ class RunService:
             return
         for step in pipeline.steps:
             manifest.upsert_step_state(step.step_id, StepRunStatus.PENDING)
-
-    def _check_dependencies(self, step: StepDefinition, manifest: RunManifest) -> None:
-        statuses = manifest.step_status_map()
-        for dependency_id in step.depends_on:
-            dependency_status = statuses.get(dependency_id, StepRunStatus.PENDING)
-            if dependency_status == StepRunStatus.QUARANTINED:
-                raise DependencyQuarantinedError(
-                    f"Step {step.step_id} blocked by quarantined dependency: {dependency_id}"
-                )
-            if dependency_status != StepRunStatus.COMPLETE:
-                joined = ", ".join(step.depends_on)
-                raise RuntimeError(
-                    f"Step {step.step_id} blocked by incomplete dependencies: {joined}"
-                )
 
     def _capture_snapshots(
         self,

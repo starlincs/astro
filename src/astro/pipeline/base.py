@@ -12,7 +12,7 @@ import polars as pl
 
 from astro.filter.types import FilterFn
 from astro.pipeline.files import AstroFile, AstroFileSpec
-from astro.pipeline.models import ExecutionMode, IngestFileSpec
+from astro.pipeline.models import ExecutionMode, IngestFileSpec, StepExecutionMode
 from astro.pipeline.steps import (
     StepContext,
     StepDefinition,
@@ -35,6 +35,8 @@ class Pipeline(ABC):
 
     name: str = "pipeline"
     execution_mode: ExecutionMode = ExecutionMode.SERIAL
+    step_execution_mode: StepExecutionMode = StepExecutionMode.SERIAL
+    max_parallel_workers: int | None = None
     ingest_files: ClassVar[list[IngestFileSpec]]
 
     def __init_subclass__(cls, **kwargs: object) -> None:

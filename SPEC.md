@@ -49,6 +49,8 @@ Pipelines declare ingest configuration and register ordered run steps:
 
 - **`ingest_files`** — expected source file patterns and Pandera schemas for CLI ingest
 - **`execution_mode`** — `serial` or `parallel` ingest concurrency rules
+- **`step_execution_mode`** — `serial` (default) or `parallel` run-step scheduling within a single run
+- **`max_parallel_workers`** — optional cap on concurrent run steps when `step_execution_mode=parallel` (defaults to `min(32, cpu_count + 4)`)
 - **`configure_steps()`** — register run steps via `add_step(label, fn, files, depends_on=[...])` or filter steps via `add_filter(label, fn, files, depends_on=[...])`
 - **`AstroFileSpec`** — per-file configuration container referenced by steps
 - **`AstroFile`** — runtime wrapper hydrated during `astro run` with explicit I/O methods
@@ -160,7 +162,9 @@ Log levels use standard semantics. WARNING lines render yellow and ERROR lines r
 - `--mode dashboard` — Rich three-panel UI: steps (left), live log (right), status bar (bottom); default
 - `--mode cli` — plain console log output (still written to the run log file)
 
-`astro run` executes registered pipeline steps in order, updates the dashboard step list, marks the run `completed` on success, `quarantined` when steps quarantine rows without blocking dependents, or `failed` on hard errors or dependency blocks, and appends logs to the run log file.
+`astro run` executes registered pipeline steps, updates the dashboard step list, marks the run `completed` on success, `quarantined` when steps quarantine rows without blocking dependents, or `failed` on hard errors or dependency blocks, and appends logs to the run log file.
+
+By default, run steps execute **serially** in registration order (respecting `depends_on`). When a pipeline sets `step_execution_mode = StepExecutionMode.PARALLEL`, Astro dispatches ready steps to a thread pool: a step runs when all dependencies are `complete`, up to `max_parallel_workers` at a time. Steps that touch the same ingested file name are serialized with per-file locks to prevent corrupting shared Parquet snapshots. Parallel scheduling is intended for I/O-bound and Polars work; pure-Python CPU-bound steps will not scale due to the GIL.
 
 ### Row quarantine
 
@@ -425,4 +429,4 @@ Before merging or completing work:
 
 ## Current status
 
-`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps with dashboard or CLI display, row quarantine, row filtering, retry for quarantined runs, and automatic statistics recording. `astro describe` prints a terminal flow diagram of ingest and run steps. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.
+`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps serially by default or in parallel when configured via `step_execution_mode`, with dashboard or CLI display, row quarantine, row filtering, retry for quarantined runs, and automatic statistics recording. `astro describe` prints a terminal flow diagram of ingest and run steps. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.

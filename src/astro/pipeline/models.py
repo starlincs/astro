@@ -16,6 +16,11 @@ class ExecutionMode(StrEnum):
     PARALLEL = "parallel"
 
 
+class StepExecutionMode(StrEnum):
+    SERIAL = "serial"
+    PARALLEL = "parallel"
+
+
 @dataclass(frozen=True)
 class IngestFileSpec:
     """Expected source file and Pandera schema for CLI ingest."""

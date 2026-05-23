@@ -3,7 +3,7 @@
 from astro.pipeline.base import IngestedSource, Pipeline
 from astro.pipeline.discovery import discover_pipeline, load_pipeline_module
 from astro.pipeline.files import AstroFile, AstroFileSpec
-from astro.pipeline.models import ExecutionMode, IngestFileSpec
+from astro.pipeline.models import ExecutionMode, IngestFileSpec, StepExecutionMode
 from astro.pipeline.steps import StepContext, StepDefinition
 
 __all__ = [
@@ -15,6 +15,7 @@ __all__ = [
     "Pipeline",
     "StepContext",
     "StepDefinition",
+    "StepExecutionMode",
     "discover_pipeline",
     "load_pipeline_module",
 ]
