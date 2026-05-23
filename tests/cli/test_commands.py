@@ -90,7 +90,7 @@ def test_run_command_cli_mode_requires_ingested_run(
         ["run", "--mode", "cli", "--pipeline-dir", str(pipeline_directory)],
     )
     assert result.exit_code == 1
-    assert "No ingested runs" in result.output
+    assert "No runnable pipeline runs" in result.output
 
 
 def test_run_command_cli_mode_completes_ingested_run(

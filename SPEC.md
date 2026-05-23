@@ -155,11 +155,72 @@ Log levels use standard semantics. WARNING lines render yellow and ERROR lines r
 
 `astro run` accepts:
 
-- `--run-id` — process a specific ingested run (defaults to the latest run with status `ingested`)
+- `--run-id` — process a specific runnable run (defaults to the latest quarantined run, else latest failed run with quarantined steps, else latest ingested run)
 - `--mode dashboard` — Rich three-panel UI: steps (left), live log (right), status bar (bottom); default
 - `--mode cli` — plain console log output (still written to the run log file)
 
-`astro run` executes registered pipeline steps in order, updates the dashboard step list, marks the run `completed` on success, and appends logs to the run log file.
+`astro run` executes registered pipeline steps in order, updates the dashboard step list, marks the run `completed` on success, `quarantined` when steps quarantine rows without blocking dependents, or `failed` on hard errors or dependency blocks, and appends logs to the run log file.
+
+### Row quarantine
+
+Steps may quarantine individual rows that fail business rules without aborting the whole step. Quarantined rows are persisted under the run directory and recorded in `manifest.json` step state.
+
+#### Run directory layout
+
+```text
+.working/{run_id}/
+  ingested/
+  processed/ …
+  snapshots/{step_id}/{ingest_name}.parquet   # input active_path captured at step start
+  quarantine/{step_id}/{ingest_name}.parquet  # rows quarantined during that step
+  manifest.json                               # extended with step_states
+```
+
+Quarantine Parquet rows use the source file schema plus a framework column `_astro_quarantine_reason: str`.
+
+#### Step API
+
+Each `StepContext` exposes a `quarantine` collector:
+
+```python
+def step_validate(_ctx: StepContext, files: list[AstroFile]) -> None:
+    file = files[0]
+    df = file.load()
+    bad = df.filter(pl.col("score") < 0)
+    good = df.filter(pl.col("score") >= 0)
+    if not bad.is_empty():
+        _ctx.quarantine.quarantine_rows(file, bad, reason="negative score")
+    file.save_in_place(good)
+```
+
+- `ctx.quarantine.quarantine_rows(file, rows, reason=...)` — append rows to the step quarantine file
+- `ctx.quarantine.quarantine_row(file, row, reason=...)` — convenience for a single row
+- `reason` must be non-empty; `rows` must not be empty
+- Step authors must exclude quarantined rows from saved output (the framework only collects and merges back on retry)
+
+#### Step and run status
+
+| Event | Step status | Run status | Pipeline action |
+|-------|-------------|------------|-----------------|
+| Step finishes with quarantined rows | `quarantined` | (unchanged until end) | Continue to next step |
+| Step depends on a quarantined step | `blocked` (not started) | `failed` at that point | Stop run |
+| All runnable steps done, some quarantined | mixed | `quarantined` | Stop run (retryable) |
+| All steps complete, no quarantine | `complete` | `completed` | Done |
+| Hard exception in step | `failed` | `failed` | Stop run |
+
+`manifest.json` stores per-step records in `step_states`: `step_id`, `status` (`pending`, `complete`, `quarantined`, `failed`, `blocked`), and optional `detail`.
+
+#### Retry
+
+Re-run `astro run` against a `quarantined` run (or a `failed` run that has quarantined steps). Resolution prefers the latest quarantined run, then the latest failed run with quarantine, then the latest ingested run.
+
+For each quarantined step only:
+
+1. Truncate the step quarantine file(s)
+2. Merge snapshot input with quarantined rows back into the file's `active_path`
+3. Re-run that step
+
+Previously completed steps are skipped. Previously blocked or pending dependent steps run once their dependencies are `complete`.
 
 ### Run statistics (SQLite)
 
@@ -264,4 +325,4 @@ Before merging or completing work:
 
 ## Current status
 
-`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps with dashboard or CLI display and marks runs completed. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.
+`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps with dashboard or CLI display, row quarantine, and retry for quarantined runs. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.

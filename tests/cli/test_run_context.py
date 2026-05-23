@@ -9,7 +9,7 @@ import pytest
 
 from astro.cli.run_context import RunResolutionError, resolve_run_directory
 from astro.pipeline.models import ExecutionMode
-from astro.working.manifest import IngestedFileRecord, RunManifest, RunStatus
+from astro.working.manifest import IngestedFileRecord, RunManifest, RunStatus, StepRunStatus
 from astro.working.run_manager import RunManager
 
 
@@ -110,5 +110,37 @@ def test_resolve_run_directory_rejects_non_ingested_run(pipeline_dir: Path) -> N
 
 
 def test_resolve_run_directory_errors_when_no_ingested_runs(pipeline_dir: Path) -> None:
-    with pytest.raises(RunResolutionError, match="No ingested runs"):
+    with pytest.raises(RunResolutionError, match="No runnable pipeline runs"):
         resolve_run_directory(pipeline_dir)
+
+
+def test_resolve_run_directory_prefers_quarantined_run(pipeline_dir: Path) -> None:
+    run_manager = RunManager(pipeline_dir)
+    ingested_directory, _ingested_manifest = run_manager.create_run(
+        pipeline_name="example",
+        execution_mode=ExecutionMode.SERIAL,
+        source_directory=pipeline_dir / "source",
+    )
+    quarantined_directory, _quarantined_manifest = run_manager.create_run(
+        pipeline_name="example",
+        execution_mode=ExecutionMode.SERIAL,
+        source_directory=pipeline_dir / "source",
+    )
+    _save_ingested_manifest(
+        run_manager,
+        ingested_directory,
+        ingested_at=datetime(2026, 5, 22, tzinfo=UTC),
+    )
+    quarantined_manifest = _save_ingested_manifest(
+        run_manager,
+        quarantined_directory,
+        ingested_at=datetime(2026, 5, 21, tzinfo=UTC),
+    )
+    quarantined_manifest.status = RunStatus.QUARANTINED
+    quarantined_manifest.upsert_step_state("step-a", StepRunStatus.QUARANTINED)
+    run_manager.save_manifest(quarantined_directory, quarantined_manifest)
+
+    run_directory, manifest = resolve_run_directory(pipeline_dir)
+
+    assert run_directory == quarantined_directory
+    assert manifest.status == RunStatus.QUARANTINED

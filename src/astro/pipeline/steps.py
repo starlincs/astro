@@ -10,6 +10,7 @@ from datetime import date
 from pathlib import Path
 
 from astro.pipeline.files import AstroFile, AstroFileSpec
+from astro.quarantine.collector import StepQuarantine
 
 StepFn = Callable[["StepContext", list[AstroFile]], None]
 ProgressCallback = Callable[[float | None], None]
@@ -30,8 +31,10 @@ class StepContext:
     run_directory: Path
     run_id: str
     run_date: date
+    step_id: str
     logger: logging.Logger
     report_progress: ProgressCallback
+    quarantine: StepQuarantine
 
 
 def slugify_step_label(label: str) -> str:

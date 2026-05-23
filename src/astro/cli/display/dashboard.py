@@ -23,6 +23,7 @@ _STATUS_ICONS = {
     StepStatus.COMPLETE: ("✓", "green"),
     StepStatus.FAILED: ("✗", "red"),
     StepStatus.WARNING: ("!", "yellow"),
+    StepStatus.QUARANTINED: ("!", "yellow"),
 }
 
 

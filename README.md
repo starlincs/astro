@@ -20,7 +20,7 @@ astro list
 astro cleanup
 ```
 
-`astro ingest` prints logs to the console and writes them to `.working/{run_id}/astro.log`. `astro run` executes registered pipeline steps; it uses a Rich dashboard by default (`--mode cli` for plain log output). Steps use `AstroFileSpec` / `AstroFile` containers with explicit output paths.
+`astro ingest` prints logs to the console and writes them to `.working/{run_id}/astro.log`. `astro run` executes registered pipeline steps; it uses a Rich dashboard by default (`--mode cli` for plain log output). Steps use `AstroFileSpec` / `AstroFile` containers with explicit output paths. Re-run `astro run` against a `quarantined` run to merge quarantined rows back and retry only the affected steps.
 
 Pipeline repos define a `pipeline.py` that imports Astro and exports a `pipeline` instance. Run Astro from that directory (or pass `-C`).
 

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from astro.working.manifest import RunManifest, RunStatus
+from astro.working.manifest import RunManifest, RunStatus, StepRunStatus
 from astro.working.run_manager import MANIFEST_FILENAME, RunManager
+
+_RUNNABLE_STATUSES = {RunStatus.INGESTED, RunStatus.QUARANTINED, RunStatus.FAILED}
 
 
 class RunResolutionError(RuntimeError):
@@ -26,16 +28,16 @@ def resolve_run_directory(
         if not manifest_path.is_file():
             raise RunResolutionError(f"Run not found: {run_id}")
         manifest = run_manager.load_manifest(run_directory)
-        if manifest.status != RunStatus.INGESTED:
+        if not _is_runnable_manifest(manifest):
             raise RunResolutionError(
                 f"Run {run_id} is not ready for processing (status={manifest.status.value})."
             )
         return run_directory, manifest
 
     if not working_root.is_dir():
-        raise RunResolutionError("No ingested runs found under .working/.")
+        raise RunResolutionError("No runnable pipeline runs found under .working/.")
 
-    ingested_runs: list[tuple[Path, RunManifest]] = []
+    runnable_runs: list[tuple[Path, RunManifest]] = []
     for run_directory in working_root.iterdir():
         if not run_directory.is_dir():
             continue
@@ -43,13 +45,49 @@ def resolve_run_directory(
         if not manifest_path.is_file():
             continue
         manifest = run_manager.load_manifest(run_directory)
-        if manifest.status != RunStatus.INGESTED or manifest.ingested_at is None:
-            continue
-        ingested_runs.append((run_directory, manifest))
+        if _is_runnable_manifest(manifest):
+            runnable_runs.append((run_directory, manifest))
 
-    if not ingested_runs:
-        raise RunResolutionError("No ingested runs found under .working/.")
+    if not runnable_runs:
+        raise RunResolutionError("No runnable pipeline runs found under .working/.")
 
-    ingested_runs.sort(key=lambda item: item[1].ingested_at or item[1].created_at, reverse=True)
+    quarantined_runs = [item for item in runnable_runs if item[1].status == RunStatus.QUARANTINED]
+    if quarantined_runs:
+        quarantined_runs.sort(
+            key=lambda item: item[1].ingested_at or item[1].created_at,
+            reverse=True,
+        )
+        run_directory, manifest = quarantined_runs[0]
+        return run_directory, manifest
+
+    retry_failed_runs = [
+        item
+        for item in runnable_runs
+        if item[1].status == RunStatus.FAILED
+        and any(record.status == StepRunStatus.QUARANTINED for record in item[1].step_states)
+    ]
+    if retry_failed_runs:
+        retry_failed_runs.sort(
+            key=lambda item: item[1].ingested_at or item[1].created_at,
+            reverse=True,
+        )
+        run_directory, manifest = retry_failed_runs[0]
+        return run_directory, manifest
+
+    ingested_runs = [item for item in runnable_runs if item[1].status == RunStatus.INGESTED]
+    ingested_runs.sort(
+        key=lambda item: item[1].ingested_at or item[1].created_at,
+        reverse=True,
+    )
     run_directory, manifest = ingested_runs[0]
     return run_directory, manifest
+
+
+def _is_runnable_manifest(manifest: RunManifest) -> bool:
+    if manifest.status == RunStatus.INGESTED and manifest.ingested_at is not None:
+        return True
+    if manifest.status == RunStatus.QUARANTINED:
+        return True
+    if manifest.status == RunStatus.FAILED:
+        return any(record.status == StepRunStatus.QUARANTINED for record in manifest.step_states)
+    return False

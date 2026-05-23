@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from astro.pipeline.base import Pipeline
-from astro.working.manifest import RunManifest, RunStatus
+from astro.working.manifest import RunManifest, RunStatus, StepRunStatus
 
 
 class StepStatus(StrEnum):
@@ -15,6 +15,7 @@ class StepStatus(StrEnum):
     COMPLETE = "complete"
     FAILED = "failed"
     WARNING = "warning"
+    QUARANTINED = "quarantined"
 
 
 @dataclass
@@ -57,6 +58,12 @@ class StepTracker:
         if detail is not None:
             step.detail = detail
 
+    def mark_quarantined(self, step_id: str, *, detail: str | None = None) -> None:
+        step = self.get_step(step_id)
+        step.status = StepStatus.QUARANTINED
+        if detail is not None:
+            step.detail = detail
+
     def set_status(self, step_id: str, status: StepStatus, *, detail: str | None = None) -> None:
         step = self.get_step(step_id)
         step.status = status
@@ -70,21 +77,37 @@ class StepTracker:
         self.progress_percent = progress_percent
 
 
+def _map_step_run_status(status: StepRunStatus) -> StepStatus:
+    mapping = {
+        StepRunStatus.PENDING: StepStatus.PENDING,
+        StepRunStatus.COMPLETE: StepStatus.COMPLETE,
+        StepRunStatus.QUARANTINED: StepStatus.QUARANTINED,
+        StepRunStatus.FAILED: StepStatus.FAILED,
+        StepRunStatus.BLOCKED: StepStatus.FAILED,
+    }
+    return mapping[status]
+
+
 def build_run_tracker(pipeline: Pipeline, manifest: RunManifest) -> StepTracker:
     ingest_status = (
         StepStatus.COMPLETE
-        if manifest.status in {RunStatus.INGESTED, RunStatus.COMPLETED} and manifest.ingested_files
+        if manifest.status
+        in {RunStatus.INGESTED, RunStatus.QUARANTINED, RunStatus.COMPLETED, RunStatus.FAILED}
+        and manifest.ingested_files
         else StepStatus.PENDING
     )
+    persisted_statuses = manifest.step_status_map()
     steps = [
         PipelineStep(id="ingest", label="Ingest", status=ingest_status),
     ]
     for step_definition in pipeline.steps:
+        persisted = persisted_statuses.get(step_definition.step_id)
+        status = _map_step_run_status(persisted) if persisted else StepStatus.PENDING
         steps.append(
             PipelineStep(
                 id=step_definition.step_id,
                 label=step_definition.label,
-                status=StepStatus.PENDING,
+                status=status,
             )
         )
     return StepTracker(steps)

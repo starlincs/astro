@@ -11,8 +11,17 @@ from pydantic import BaseModel, Field
 class RunStatus(StrEnum):
     CREATED = "created"
     INGESTED = "ingested"
+    QUARANTINED = "quarantined"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class StepRunStatus(StrEnum):
+    PENDING = "pending"
+    COMPLETE = "complete"
+    QUARANTINED = "quarantined"
+    FAILED = "failed"
+    BLOCKED = "blocked"
 
 
 class IngestedFileRecord(BaseModel):
@@ -24,6 +33,12 @@ class IngestedFileRecord(BaseModel):
     source_size_bytes: int
 
 
+class StepRunRecord(BaseModel):
+    step_id: str
+    status: StepRunStatus
+    detail: str | None = None
+
+
 class RunManifest(BaseModel):
     run_id: str
     pipeline_name: str
@@ -33,6 +48,27 @@ class RunManifest(BaseModel):
     created_at: datetime
     ingested_at: datetime | None = None
     ingested_files: list[IngestedFileRecord] = Field(default_factory=list)
+    step_states: list[StepRunRecord] = Field(default_factory=list)
 
     def is_incomplete(self) -> bool:
         return self.status != RunStatus.COMPLETED
+
+    def step_status_map(self) -> dict[str, StepRunStatus]:
+        return {record.step_id: record.status for record in self.step_states}
+
+    def upsert_step_state(
+        self,
+        step_id: str,
+        status: StepRunStatus,
+        *,
+        detail: str | None = None,
+    ) -> None:
+        for index, record in enumerate(self.step_states):
+            if record.step_id == step_id:
+                self.step_states[index] = StepRunRecord(
+                    step_id=step_id,
+                    status=status,
+                    detail=detail,
+                )
+                return
+        self.step_states.append(StepRunRecord(step_id=step_id, status=status, detail=detail))
