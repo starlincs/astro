@@ -5,15 +5,24 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandera.polars as pa
-import polars as pl
 import pytest
 
 from astro.ingest.service import IngestService
 from astro.pipeline.base import Pipeline
+from astro.pipeline.files import AstroFile, AstroFileSpec
 from astro.pipeline.models import ExecutionMode, IngestFileSpec
+from astro.pipeline.steps import StepContext
 from astro.storage.sqlite import PipelineStore
 from astro.working.manifest import RunStatus
 from astro.working.run_manager import RunManager, SerialIngestConflictError
+
+
+class EstablishmentsFile(AstroFileSpec):
+    ingest_name = "establishments"
+
+
+def step_noop(_ctx: StepContext, _files: list[AstroFile]) -> None:
+    return None
 
 
 class SerialTestPipeline(Pipeline):
@@ -33,11 +42,8 @@ class SerialTestPipeline(Pipeline):
         ),
     ]
 
-    def transform(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
-        return data
-
-    def validate(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
-        return data
+    def configure_steps(self) -> None:
+        self.add_step("No-op", step_noop, [EstablishmentsFile()])
 
 
 class ParallelTestPipeline(SerialTestPipeline):

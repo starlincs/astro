@@ -1,13 +1,18 @@
 """Base pipeline interface for Astro library users."""
 
-from abc import ABC, abstractmethod
+from __future__ import annotations
+
+from abc import ABC
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
 import polars as pl
 
+from astro.pipeline.files import AstroFileSpec
 from astro.pipeline.models import ExecutionMode, IngestFileSpec
+from astro.pipeline.steps import StepDefinition, StepFn, slugify_step_label
 
 
 @dataclass(frozen=True)
@@ -34,18 +39,66 @@ class Pipeline(ABC):
         if len(names) != len(set(names)):
             raise TypeError(f"{cls.__name__} ingest_files names must be unique.")
 
-    @abstractmethod
-    def transform(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
-        """Apply pipeline-specific transformations to one source file."""
-        ...
+    def __init__(self) -> None:
+        self._steps: list[StepDefinition] = []
+        self.configure_steps()
+        if not self._steps:
+            raise ValueError(f"{self.__class__.__name__} must define at least one run step.")
 
-    @abstractmethod
-    def validate(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
-        """Validate one source file against the appropriate pipeline schema."""
-        ...
+    def configure_steps(self) -> None:  # noqa: B027
+        """Register run steps via ``add_step``."""
+
+    def add_step(
+        self,
+        label: str,
+        fn: StepFn,
+        files: Sequence[AstroFileSpec],
+        *,
+        step_id: str | None = None,
+        depends_on: Sequence[str] | None = None,
+    ) -> None:
+        if not files:
+            raise ValueError("Each step must reference at least one AstroFileSpec.")
+
+        resolved_step_id = step_id or slugify_step_label(label)
+        registered_ids = {step.step_id for step in self._steps}
+        if resolved_step_id in registered_ids:
+            raise ValueError(f"Step id must be unique: {resolved_step_id}")
+
+        ingest_names = {spec.name for spec in self.ingest_files}
+        for file_spec in files:
+            ingest_name = getattr(file_spec.__class__, "ingest_name", None)
+            if not ingest_name:
+                raise ValueError(
+                    f"{file_spec.__class__.__name__} must define an ingest_name class attribute."
+                )
+            if ingest_name not in ingest_names:
+                raise ValueError(
+                    f"AstroFileSpec ingest_name {ingest_name!r} is not declared in ingest_files."
+                )
+
+        dependency_ids = tuple(depends_on or ())
+        unknown_dependencies = set(dependency_ids) - registered_ids
+        if unknown_dependencies:
+            joined = ", ".join(sorted(unknown_dependencies))
+            raise ValueError(f"Unknown depends_on step id(s): {joined}")
+
+        self._steps.append(
+            StepDefinition(
+                step_id=resolved_step_id,
+                label=label,
+                fn=fn,
+                file_specs=tuple(files),
+                depends_on=dependency_ids,
+            )
+        )
+
+    @property
+    def steps(self) -> list[StepDefinition]:
+        return list(self._steps)
 
     def run(self, path: Path) -> list[IngestedSource]:
-        """Legacy entry point; use ``astro run`` once implemented."""
+        """Legacy entry point; use ``astro ingest`` and ``astro run`` instead."""
         raise NotImplementedError(
-            "Pipeline.run() is not available yet. Use astro ingest and astro run."
+            "Pipeline.run() is not available. Use astro ingest and astro run."
         )

@@ -12,12 +12,15 @@ pip install -e ".[dev]"
 
 ```bash
 astro --help
-astro ingest path/to/data.csv
 astro ingest path/to/data/
 astro run
+astro run --mode cli
+astro run --run-id abc12
 astro list
 astro cleanup
 ```
+
+`astro ingest` prints logs to the console and writes them to `.working/{run_id}/astro.log`. `astro run` executes registered pipeline steps; it uses a Rich dashboard by default (`--mode cli` for plain log output). Steps use `AstroFileSpec` / `AstroFile` containers with explicit output paths.
 
 Pipeline repos define a `pipeline.py` that imports Astro and exports a `pipeline` instance. Run Astro from that directory (or pass `-C`).
 

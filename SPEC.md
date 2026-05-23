@@ -45,14 +45,25 @@ When Astro runs in a directory containing `pipeline.py`, it discovers and loads 
 
 ## Pipeline contract
 
-Pipelines declare ingest configuration and implement transform/validate:
+Pipelines declare ingest configuration and register ordered run steps:
 
 - **`ingest_files`** — expected source file patterns and Pandera schemas for CLI ingest
 - **`execution_mode`** — `serial` or `parallel` ingest concurrency rules
-- **`transform(data, source)`** — transform one ingested source file
-- **`validate(data, source)`** — validate one ingested source file
+- **`configure_steps()`** — register run steps via `add_step(label, fn, files, depends_on=[...])`
+- **`AstroFileSpec`** — per-file configuration container referenced by steps
+- **`AstroFile`** — runtime wrapper hydrated during `astro run` with explicit I/O methods
 
-Each source file may have a different schema. `Pipeline.run()` is reserved for a future `astro run` command.
+Each source file may have a different schema. Run steps replace the previous `transform` / `validate` methods.
+
+### AstroFile I/O
+
+Steps must write outputs explicitly:
+
+- `file.save_in_place(df)` — overwrite the ingested Parquet snapshot
+- `file.save_to(subfolder, filename, df)` — write under `.working/{run_id}/{subfolder}/`
+- `file.load()` — read from the file's current active path
+
+Validation-only steps may call `load()` and raise without saving.
 
 ## Ingest step
 
@@ -69,8 +80,18 @@ Each source file may have a different schema. `Pipeline.run()` is reserved for a
 ### Pipeline author configuration
 
 ```python
-from astro.pipeline import ExecutionMode, IngestFileSpec, Pipeline
+from astro import AstroFileSpec, Pipeline
+from astro.pipeline import ExecutionMode, IngestFileSpec
+from astro.pipeline.files import AstroFile
+from astro.pipeline.steps import StepContext
 import pandera.polars as pa
+
+class EstablishmentsFile(AstroFileSpec):
+    ingest_name = "establishments"
+
+def step_copy_establishments(_ctx: StepContext, files: list[AstroFile]) -> None:
+    file = files[0]
+    file.save_to("processed", "establishments.parquet", file.load())
 
 class ExamplePipeline(Pipeline):
     execution_mode = ExecutionMode.SERIAL
@@ -84,6 +105,13 @@ class ExamplePipeline(Pipeline):
             ),
         ),
     ]
+
+    def configure_steps(self) -> None:
+        self.add_step(
+            "Copy establishments to processed",
+            step_copy_establishments,
+            [EstablishmentsFile()],
+        )
 ```
 
 ### Ingest behaviour
@@ -102,6 +130,36 @@ class ExamplePipeline(Pipeline):
 | `parallel` | Allow multiple incomplete runs concurrently |
 
 Run IDs are 5-character lowercase alphanumeric strings.
+
+### CLI logging
+
+Each run directory may contain an `astro.log` file alongside `manifest.json`.
+
+| Command | Console output | Run log file |
+|---------|----------------|--------------|
+| `astro ingest` | yes | `.working/{run_id}/astro.log` (created after run allocation) |
+| `astro run` | dashboard (default) or plain logs (`--mode cli`) | same path; sessions append with a separator |
+| `astro list`, `astro cleanup` | yes | no |
+
+Each log-file session starts with a timestamp separator:
+
+```text
+================================================================================
+Astro session started: 2026-05-22T14:30:00.123456+00:00  command=ingest  run_id=abc12
+================================================================================
+```
+
+Log levels use standard semantics. WARNING lines render yellow and ERROR lines render red in console and dashboard views.
+
+### Run display modes
+
+`astro run` accepts:
+
+- `--run-id` — process a specific ingested run (defaults to the latest run with status `ingested`)
+- `--mode dashboard` — Rich three-panel UI: steps (left), live log (right), status bar (bottom); default
+- `--mode cli` — plain console log output (still written to the run log file)
+
+`astro run` executes registered pipeline steps in order, updates the dashboard step list, marks the run `completed` on success, and appends logs to the run log file.
 
 ### Run statistics (SQLite)
 
@@ -190,7 +248,7 @@ Resolution is vectorized with Polars joins and expressions. UUID assignment loop
 | Command | Purpose |
 |---------|---------|
 | `astro ingest SOURCE_DIR` | Create a run, validate source files, materialize Parquet |
-| `astro run` | Run the pipeline (not implemented) |
+| `astro run [--run-id ID] [--mode dashboard\|cli]` | Execute registered pipeline steps on an ingested run |
 | `astro list` | List registered pipelines and their statistics (not implemented) |
 | `astro cleanup [--all]` | Remove stored pipeline data (not implemented) |
 
@@ -206,4 +264,4 @@ Before merging or completing work:
 
 ## Current status
 
-`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, and serial/parallel gating. The canonical ID resolver library is implemented. `astro run`, `astro list`, and `astro cleanup` remain stubs.
+`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps with dashboard or CLI display and marks runs completed. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.

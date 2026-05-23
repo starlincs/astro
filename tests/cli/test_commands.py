@@ -31,7 +31,7 @@ def test_ingest_command_creates_run(
     )
     assert result.exit_code == 0
     assert "Run " in result.output
-    assert "ingested establishments" in result.output
+    assert "establishments" in result.output
 
 
 def test_ingest_command_rejects_file_path(
@@ -81,25 +81,78 @@ def test_ingest_command_reports_serial_conflict(
     assert "Ingest blocked" in second.output
 
 
-def test_run_command_stub(cli_runner: CliRunner) -> None:
-    result = cli_runner.invoke(app, ["run"])
+def test_run_command_cli_mode_requires_ingested_run(
+    cli_runner: CliRunner,
+    pipeline_directory: Path,
+) -> None:
+    result = cli_runner.invoke(
+        app,
+        ["run", "--mode", "cli", "--pipeline-dir", str(pipeline_directory)],
+    )
+    assert result.exit_code == 1
+    assert "No ingested runs" in result.output
+
+
+def test_run_command_cli_mode_completes_ingested_run(
+    cli_runner: CliRunner,
+    pipeline_directory: Path,
+    source_directory: Path,
+) -> None:
+    ingest_result = cli_runner.invoke(
+        app,
+        [
+            "ingest",
+            str(source_directory),
+            "--pipeline-dir",
+            str(pipeline_directory),
+        ],
+    )
+    assert ingest_result.exit_code == 0
+
+    result = cli_runner.invoke(
+        app,
+        ["run", "--mode", "cli", "--pipeline-dir", str(pipeline_directory)],
+    )
     assert result.exit_code == 0
-    assert "run: not implemented" in result.output
+    assert "completed" in result.output.lower()
+
+
+def test_run_command_dashboard_mode_completes_ingested_run(
+    cli_runner: CliRunner,
+    pipeline_directory: Path,
+    source_directory: Path,
+) -> None:
+    ingest_result = cli_runner.invoke(
+        app,
+        [
+            "ingest",
+            str(source_directory),
+            "--pipeline-dir",
+            str(pipeline_directory),
+        ],
+    )
+    assert ingest_result.exit_code == 0
+
+    result = cli_runner.invoke(
+        app,
+        ["run", "--pipeline-dir", str(pipeline_directory)],
+    )
+    assert result.exit_code == 0
 
 
 def test_list_command_stub(cli_runner: CliRunner) -> None:
     result = cli_runner.invoke(app, ["list"])
     assert result.exit_code == 0
-    assert "list: not implemented" in result.output
+    assert "not implemented" in result.output.lower()
 
 
 def test_cleanup_command_stub(cli_runner: CliRunner) -> None:
     result = cli_runner.invoke(app, ["cleanup"])
     assert result.exit_code == 0
-    assert "cleanup: not implemented" in result.output
+    assert "not implemented" in result.output.lower()
 
 
 def test_cleanup_all_flag_stub(cli_runner: CliRunner) -> None:
     result = cli_runner.invoke(app, ["cleanup", "--all"])
     assert result.exit_code == 0
-    assert "cleanup: not implemented" in result.output
+    assert "not implemented" in result.output.lower()

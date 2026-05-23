@@ -36,13 +36,19 @@ def pipeline_directory(tmp_path: Path, sample_ingest_spec: IngestFileSpec) -> Pa
     pipeline_path = tmp_path / "pipeline.py"
     pipeline_path.write_text(
         """
-from pathlib import Path
-
-import pandera.polars as pa
-import polars as pl
-
 from astro import Pipeline
-from astro.pipeline import ExecutionMode, IngestFileSpec
+from astro.pipeline import AstroFileSpec, ExecutionMode, IngestFileSpec
+from astro.pipeline.steps import StepContext
+from astro.pipeline.files import AstroFile
+import pandera.polars as pa
+
+
+class EstablishmentsFile(AstroFileSpec):
+    ingest_name = "establishments"
+
+
+def step_noop(_ctx: StepContext, _files: list[AstroFile]) -> None:
+    return None
 
 
 class TestPipeline(Pipeline):
@@ -62,11 +68,8 @@ class TestPipeline(Pipeline):
         ),
     ]
 
-    def transform(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
-        return data
-
-    def validate(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
-        return data
+    def configure_steps(self) -> None:
+        self.add_step("No-op", step_noop, [EstablishmentsFile()])
 
 
 pipeline = TestPipeline()

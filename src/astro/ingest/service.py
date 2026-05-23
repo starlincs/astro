@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,6 +14,8 @@ from astro.pipeline.base import Pipeline
 from astro.storage.sqlite import PipelineStore
 from astro.working.manifest import RunStatus
 from astro.working.run_manager import RunManager
+
+logger = logging.getLogger("astro.ingest")
 
 
 @dataclass(frozen=True)
@@ -30,24 +34,44 @@ class IngestService:
         self.run_manager = RunManager(pipeline_dir)
         self.store = PipelineStore(pipeline_dir / ".astro" / "stats.db")
 
-    def ingest(self, source_directory: Path) -> IngestResult:
+    def ingest(
+        self,
+        source_directory: Path,
+        *,
+        on_run_created: Callable[[Path, str], None] | None = None,
+    ) -> IngestResult:
         source_directory = source_directory.resolve()
         self.run_manager.assert_serial_ingest_allowed(self.pipeline.execution_mode)
+        logger.info("Serial ingest gate passed for pipeline %s", self.pipeline.name)
 
         run_directory, manifest = self.run_manager.create_run(
             pipeline_name=self.pipeline.name,
             execution_mode=self.pipeline.execution_mode,
             source_directory=source_directory,
         )
+        logger.info("Run %s created at %s", manifest.run_id, run_directory)
+        if on_run_created is not None:
+            on_run_created(run_directory, manifest.run_id)
 
         try:
+            logger.info("Matching source files in %s", source_directory)
             matched_files = match_ingest_files(source_directory, self.pipeline.ingest_files)
             ingest_directory = self.run_manager.ingest_directory_for(run_directory)
-            materialized_files = [
-                materialize_ingest_file(matched_file, ingest_directory=ingest_directory)
-                for matched_file in matched_files
-            ]
-        except (IngestValidationError, Exception):
+            materialized_files = []
+            for matched_file in matched_files:
+                logger.info("Materializing %s", matched_file.spec.name)
+                materialized = materialize_ingest_file(
+                    matched_file,
+                    ingest_directory=ingest_directory,
+                )
+                materialized_files.append(materialized)
+                logger.info(
+                    "Ingested %s (%s rows)",
+                    matched_file.spec.name,
+                    materialized.record.row_count,
+                )
+        except (IngestValidationError, Exception) as error:
+            logger.error("Ingest failed: %s", error)
             self._mark_failed(run_directory)
             raise
 
@@ -66,6 +90,11 @@ class IngestService:
             ingested_at=ingested_at,
         )
         self.store.record_ingest_files(manifest.run_id, manifest.ingested_files)
+        logger.info(
+            "Run %s marked ingested with %s file(s)",
+            manifest.run_id,
+            len(materialized_files),
+        )
 
         return IngestResult(
             run_id=manifest.run_id,

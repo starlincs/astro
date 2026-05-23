@@ -5,11 +5,20 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandera.polars as pa
-import polars as pl
 import pytest
 
 from astro import Pipeline
-from astro.pipeline import ExecutionMode, IngestFileSpec
+from astro.pipeline import AstroFileSpec, ExecutionMode, IngestFileSpec
+from astro.pipeline.files import AstroFile
+from astro.pipeline.steps import StepContext
+
+
+class EstablishmentsFile(AstroFileSpec):
+    ingest_name = "establishments"
+
+
+def step_record(_ctx: StepContext, files: list[AstroFile]) -> None:
+    _ctx.logger.info("loaded %s rows", len(files[0].load()))
 
 
 class RecordingPipeline(Pipeline):
@@ -17,23 +26,14 @@ class RecordingPipeline(Pipeline):
     execution_mode = ExecutionMode.PARALLEL
     ingest_files = [
         IngestFileSpec(
-            name="records",
+            name="establishments",
             source_pattern="*.csv",
             schema=pa.DataFrameSchema({"value": pa.Column(str)}, strict="filter"),
         ),
     ]
 
-    def __init__(self) -> None:
-        self.transform_calls: list[Path] = []
-        self.validate_calls: list[Path] = []
-
-    def transform(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
-        self.transform_calls.append(source)
-        return data.with_columns(pl.lit("transformed").alias("stage"))
-
-    def validate(self, data: pl.DataFrame, source: Path) -> pl.DataFrame:
-        self.validate_calls.append(source)
-        return data.with_columns(pl.lit("validated").alias("status"))
+    def configure_steps(self) -> None:
+        self.add_step("Record", step_record, [EstablishmentsFile()])
 
 
 def test_pipeline_run_is_not_implemented_yet() -> None:
@@ -42,14 +42,8 @@ def test_pipeline_run_is_not_implemented_yet() -> None:
         pipeline.run(Path("/tmp/source"))
 
 
-def test_pipeline_transform_and_validate_can_be_called_directly() -> None:
+def test_pipeline_registers_run_steps() -> None:
     pipeline = RecordingPipeline()
-    source = Path("/tmp/a.csv")
-    data = pl.DataFrame({"value": ["1"]})
 
-    transformed = pipeline.transform(data, source)
-    validated = pipeline.validate(transformed, source)
-
-    assert pipeline.transform_calls == [source]
-    assert pipeline.validate_calls == [source]
-    assert validated.columns == ["value", "stage", "status"]
+    assert len(pipeline.steps) == 1
+    assert pipeline.steps[0].step_id == "record"

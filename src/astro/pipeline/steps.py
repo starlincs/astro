@@ -1,0 +1,39 @@
+"""Pipeline run step definitions and execution context."""
+
+from __future__ import annotations
+
+import logging
+import re
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+
+from astro.pipeline.files import AstroFile, AstroFileSpec
+
+StepFn = Callable[["StepContext", list[AstroFile]], None]
+ProgressCallback = Callable[[float | None], None]
+
+
+@dataclass(frozen=True)
+class StepDefinition:
+    step_id: str
+    label: str
+    fn: StepFn
+    file_specs: tuple[AstroFileSpec, ...]
+    depends_on: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StepContext:
+    pipeline_dir: Path
+    run_directory: Path
+    run_id: str
+    run_date: date
+    logger: logging.Logger
+    report_progress: ProgressCallback
+
+
+def slugify_step_label(label: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")
+    return slug or "step"
