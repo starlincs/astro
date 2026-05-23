@@ -11,6 +11,7 @@ from pathlib import Path
 from astro.ingest.materialize import materialize_ingest_file
 from astro.ingest.validator import IngestValidationError, match_ingest_files
 from astro.pipeline.base import Pipeline
+from astro.stats.recorder import StatisticsRecorder
 from astro.storage.sqlite import PipelineStore
 from astro.working.manifest import RunStatus
 from astro.working.run_manager import RunManager
@@ -89,6 +90,13 @@ class IngestService:
             created_at=manifest.created_at,
             ingested_at=ingested_at,
         )
+        stats = StatisticsRecorder(manifest.run_id, self.store)
+        for materialized in materialized_files:
+            record = materialized.record
+            stats.record_file(record.name, "row_count", record.row_count)
+            stats.record_file(record.name, "column_count", record.column_count)
+            stats.record_file(record.name, "source_size_bytes", record.source_size_bytes)
+        stats.record_run("files_ingested", len(materialized_files))
         self.store.record_ingest_files(manifest.run_id, manifest.ingested_files)
         logger.info(
             "Run %s marked ingested with %s file(s)",
@@ -106,3 +114,12 @@ class IngestService:
         manifest = self.run_manager.load_manifest(run_directory)
         manifest.status = RunStatus.FAILED
         self.run_manager.save_manifest(run_directory, manifest)
+        self.store.record_run(
+            run_id=manifest.run_id,
+            pipeline_name=manifest.pipeline_name,
+            status=manifest.status.value,
+            source_directory=manifest.source_directory,
+            created_at=manifest.created_at,
+            ingested_at=manifest.ingested_at,
+        )
+        StatisticsRecorder(manifest.run_id, self.store).record_run("ingest_failed", 1)

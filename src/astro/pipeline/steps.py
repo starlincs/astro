@@ -11,6 +11,7 @@ from pathlib import Path
 
 from astro.pipeline.files import AstroFile, AstroFileSpec
 from astro.quarantine.collector import StepQuarantine
+from astro.stats.recorder import StatisticsRecorder
 
 StepFn = Callable[["StepContext", list[AstroFile]], None]
 ProgressCallback = Callable[[float | None], None]
@@ -35,6 +36,7 @@ class StepContext:
     logger: logging.Logger
     report_progress: ProgressCallback
     quarantine: StepQuarantine
+    stats: StatisticsRecorder
 
 
 def slugify_step_label(label: str) -> str:

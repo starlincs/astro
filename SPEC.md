@@ -222,12 +222,61 @@ For each quarantined step only:
 
 Previously completed steps are skipped. Previously blocked or pending dependent steps run once their dependencies are `complete`.
 
+### Statistics
+
+Pipeline runs record numeric statistics scoped to a **run**, **file**, or **step**, keyed by an **action** name. Each update:
+
+1. Logs an INFO line to `astro.stats` (visible in console, dashboard, and `astro.log`)
+2. Upserts the value in SQLite (later calls replace the prior value for the same scope/subject/action)
+
+Log format:
+
+```text
+STAT run=abc12 scope=step subject=validate action=rows_quarantined value=3
+```
+
+Run-scoped statistics use `subject=-` in log output.
+
+#### Step API
+
+Each `StepContext` exposes a `stats` recorder:
+
+```python
+def step_transform(ctx: StepContext, files: list[AstroFile]) -> None:
+    file = files[0]
+    dataframe = file.load()
+    ctx.stats.record_file(file.spec.__class__.ingest_name, "rows_read", dataframe.height)
+    ctx.stats.record_run("custom_counter", 1)
+    ctx.stats.record_step("rows_written", dataframe.height)
+    file.save_in_place(dataframe)
+```
+
+- `ctx.stats.record_run(action, value)` — run-scoped metric
+- `ctx.stats.record_file(file_name, action, value)` — file-scoped metric (ingest name)
+- `ctx.stats.record_step(action, value)` — step-scoped metric for the current step
+
+`StatisticsRecorder` and `StatScope` are also exported from `astro` for use outside step functions.
+
+#### Built-in statistics
+
+| Phase | Scope | Action | When recorded |
+|-------|-------|--------|---------------|
+| Ingest | file | `row_count`, `column_count`, `source_size_bytes` | After each file materializes |
+| Ingest | run | `files_ingested` | After successful ingest |
+| Ingest | run | `ingest_failed` | On ingest failure |
+| Run | step | `duration_ms` | After each step executes |
+| Run | step | `rows_quarantined` | When a step quarantines rows |
+| Run | run | `steps_completed` | When run finishes |
+| Run | run | `duration_ms` | When run finishes |
+| Run | run | `steps_quarantined` | When run finishes with quarantined steps |
+
 ### Run statistics (SQLite)
 
 Stored in `{pipeline_dir}/.astro/stats.db`:
 
 - **`runs`**: `run_id`, `pipeline_name`, `status`, `source_directory`, `created_at`, `ingested_at`
 - **`ingest_files`**: per-file row/column counts, source path, parquet path, source size
+- **`statistics`**: generic metrics with `run_id`, `scope` (`run` / `file` / `step`), `subject` (empty for run scope), `action`, `value`, `recorded_at`
 
 ## Storage
 
@@ -325,4 +374,4 @@ Before merging or completing work:
 
 ## Current status
 
-`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps with dashboard or CLI display, row quarantine, and retry for quarantined runs. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.
+`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps with dashboard or CLI display, row quarantine, retry for quarantined runs, and automatic statistics recording. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.

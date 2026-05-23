@@ -12,6 +12,7 @@ from astro.pipeline.base import Pipeline
 from astro.pipeline.files import AstroFile, AstroFileSpec
 from astro.pipeline.models import ExecutionMode, IngestFileSpec
 from astro.pipeline.steps import StepContext
+from astro.stats.models import StatScope
 from astro.storage.sqlite import PipelineStore
 from astro.working.manifest import RunStatus
 from astro.working.run_manager import RunManager, SerialIngestConflictError
@@ -84,6 +85,24 @@ def test_ingest_service_records_sqlite_stats(
 
     assert runs[0]["run_id"] == result.run_id
     assert runs[0]["status"] == RunStatus.INGESTED.value
+
+    file_stats = store.list_stats(
+        result.run_id,
+        scope=StatScope.FILE,
+        subject="establishments",
+    )
+    file_stat_actions = {stat.action: stat.value for stat in file_stats}
+    assert file_stat_actions["row_count"] == 1
+    assert file_stat_actions["column_count"] == 2
+    assert file_stat_actions["source_size_bytes"] > 0
+    assert (
+        store.list_stats(
+            result.run_id,
+            scope=StatScope.RUN,
+            action="files_ingested",
+        )[0].value
+        == 1
+    )
 
 
 def test_serial_pipeline_blocks_second_ingest(

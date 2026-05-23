@@ -111,10 +111,73 @@ def test_dashboard_renders_layout_to_string() -> None:
     buffer.emit(record)
 
     output = StringIO()
-    dashboard = RunDashboard(tracker, buffer, console=Console(file=output, width=120))
+    dashboard = RunDashboard(tracker, buffer, console=Console(file=output, width=120, height=50))
     dashboard.render_once()
 
     rendered = output.getvalue()
     assert "Ingest" in rendered
-    assert "Resolve establishments" in rendered
+    assert "Resolve" in rendered
+    assert "establishments" in rendered
     assert "Run completed" in rendered
+
+
+def test_dashboard_limits_visible_log_lines() -> None:
+    import logging
+
+    from astro.cli.display.dashboard import MAX_VISIBLE_LOG_LINES
+
+    tracker = StepTracker([PipelineStep(id="ingest", label="Ingest", status=StepStatus.COMPLETE)])
+    buffer = InMemoryLogBuffer()
+    buffer.setFormatter(PlainLogFormatter())
+
+    total_records = MAX_VISIBLE_LOG_LINES + 15
+    for index in range(total_records):
+        buffer.emit(
+            logging.LogRecord(
+                name="astro.run",
+                level=logging.INFO,
+                pathname=__file__,
+                lineno=1,
+                msg=f"Log line {index:03d}",
+                args=(),
+                exc_info=None,
+            )
+        )
+
+    output = StringIO()
+    dashboard = RunDashboard(tracker, buffer, console=Console(file=output, width=120, height=50))
+    dashboard.render_once()
+    rendered = output.getvalue()
+
+    assert f"Log line {total_records - 1:03d}" in rendered
+    assert "Log line 000" not in rendered
+    assert rendered.count("Log line") == MAX_VISIBLE_LOG_LINES
+
+
+def test_dashboard_keeps_panels_side_by_side_with_long_log_lines() -> None:
+    import logging
+
+    tracker = StepTracker([PipelineStep(id="ingest", label="Ingest", status=StepStatus.COMPLETE)])
+    buffer = InMemoryLogBuffer()
+    buffer.setFormatter(PlainLogFormatter())
+    long_message = "STAT run=abcde scope=file subject=establishments action=row_count value=1 " + (
+        "x" * 200
+    )
+    buffer.emit(
+        logging.LogRecord(
+            name="astro.stats",
+            level=logging.INFO,
+            pathname=__file__,
+            lineno=1,
+            msg=long_message,
+            args=(),
+            exc_info=None,
+        )
+    )
+
+    output = StringIO()
+    dashboard = RunDashboard(tracker, buffer, console=Console(file=output, width=100, height=50))
+    dashboard.render_once()
+    rendered = output.getvalue()
+
+    assert any("Steps" in line and "Live log" in line for line in rendered.splitlines()[:8])

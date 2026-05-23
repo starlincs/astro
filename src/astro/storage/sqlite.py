@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from astro.stats.models import StatRecord, StatScope
 from astro.working.manifest import IngestedFileRecord
+
+_RUN_SCOPE_SUBJECT = ""
 
 
 @dataclass(frozen=True)
@@ -49,6 +52,17 @@ class PipelineStore:
                     row_count INTEGER NOT NULL,
                     column_count INTEGER NOT NULL,
                     source_size_bytes INTEGER NOT NULL,
+                    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS statistics (
+                    run_id TEXT NOT NULL,
+                    scope TEXT NOT NULL,
+                    subject TEXT NOT NULL DEFAULT '',
+                    action TEXT NOT NULL,
+                    value REAL NOT NULL,
+                    recorded_at TEXT NOT NULL,
+                    PRIMARY KEY (run_id, scope, subject, action),
                     FOREIGN KEY (run_id) REFERENCES runs(run_id)
                 );
                 """
@@ -122,6 +136,70 @@ class PipelineStore:
                 ],
             )
 
+    def record_stat(
+        self,
+        run_id: str,
+        scope: StatScope,
+        subject: str | None,
+        action: str,
+        value: float,
+    ) -> None:
+        self.initialize()
+        stored_subject = subject if subject is not None else _RUN_SCOPE_SUBJECT
+        recorded_at = datetime.now().isoformat()
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO statistics (
+                    run_id, scope, subject, action, value, recorded_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id, scope, subject, action) DO UPDATE SET
+                    value = excluded.value,
+                    recorded_at = excluded.recorded_at
+                """,
+                (run_id, scope.value, stored_subject, action, value, recorded_at),
+            )
+
+    def list_stats(
+        self,
+        run_id: str,
+        *,
+        scope: StatScope | None = None,
+        subject: str | None = None,
+        action: str | None = None,
+    ) -> list[StatRecord]:
+        self.initialize()
+        query = (
+            "SELECT run_id, scope, subject, action, value, recorded_at "
+            "FROM statistics WHERE run_id = ?"
+        )
+        params: list[object] = [run_id]
+        if scope is not None:
+            query += " AND scope = ?"
+            params.append(scope.value)
+        if subject is not None:
+            query += " AND subject = ?"
+            params.append(subject)
+        if action is not None:
+            query += " AND action = ?"
+            params.append(action)
+        query += " ORDER BY scope, subject, action"
+
+        with self._connect() as connection:
+            rows = connection.execute(query, params).fetchall()
+
+        return [
+            StatRecord(
+                run_id=row[0],
+                scope=StatScope(row[1]),
+                subject=row[2] if row[2] != _RUN_SCOPE_SUBJECT else None,
+                action=row[3],
+                value=row[4],
+                recorded_at=datetime.fromisoformat(row[5]),
+            )
+            for row in rows
+        ]
+
     def list_runs(self, pipeline_name: str | None = None) -> list[dict[str, object]]:
         self.initialize()
         with self._connect() as connection:
@@ -153,6 +231,7 @@ class PipelineStore:
         self.initialize()
         with self._connect() as connection:
             if pipeline_name is None:
+                connection.execute("DELETE FROM statistics")
                 connection.execute("DELETE FROM ingest_files")
                 connection.execute("DELETE FROM runs")
             else:
@@ -161,6 +240,7 @@ class PipelineStore:
                     (pipeline_name,),
                 ).fetchall()
                 for (run_id,) in run_ids:
+                    connection.execute("DELETE FROM statistics WHERE run_id = ?", (run_id,))
                     connection.execute("DELETE FROM ingest_files WHERE run_id = ?", (run_id,))
                 connection.execute("DELETE FROM runs WHERE pipeline_name = ?", (pipeline_name,))
 

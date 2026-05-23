@@ -1,7 +1,7 @@
 """Smoke tests for package import."""
 
 import astro
-from astro import CanonicalIdResolver, IngestedSource, Pipeline
+from astro import CanonicalIdResolver, IngestedSource, Pipeline, StatisticsRecorder, StatScope
 
 
 def test_package_version() -> None:
@@ -12,3 +12,5 @@ def test_public_exports() -> None:
     assert CanonicalIdResolver is not None
     assert IngestedSource is not None
     assert Pipeline is not None
+    assert StatScope is not None
+    assert StatisticsRecorder is not None

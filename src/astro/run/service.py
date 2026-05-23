@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
@@ -14,6 +15,7 @@ from astro.pipeline.files import AstroFile
 from astro.pipeline.steps import StepContext, StepDefinition
 from astro.quarantine.collector import StepQuarantine
 from astro.quarantine.store import QuarantineStore
+from astro.stats.recorder import StatisticsRecorder
 from astro.storage.sqlite import PipelineStore
 from astro.working.manifest import RunManifest, RunStatus, StepRunStatus
 from astro.working.run_manager import RunManager
@@ -54,6 +56,7 @@ class RunService:
 
         run_manager = RunManager(pipeline_dir)
         store = PipelineStore(pipeline_dir / ".astro" / "stats.db")
+        stats_recorder = StatisticsRecorder(manifest.run_id, store)
         active_tracker = tracker or build_run_tracker(pipeline, manifest)
         file_pool = self._hydrate_files(pipeline, manifest, run_directory)
         quarantine_store = QuarantineStore(run_directory)
@@ -63,6 +66,7 @@ class RunService:
             1 for record in manifest.step_states if record.status == StepRunStatus.COMPLETE
         )
         stop_reason: str | None = None
+        run_started_at = time.monotonic()
 
         def report_progress(progress_percent: float | None) -> None:
             active_tracker.set_progress_percent(progress_percent)
@@ -105,6 +109,7 @@ class RunService:
                 progress_callback()
 
             quarantine = StepQuarantine(run_directory, step.step_id)
+            step_stats = stats_recorder.for_step(step.step_id)
             context = StepContext(
                 pipeline_dir=pipeline_dir,
                 run_directory=run_directory,
@@ -114,12 +119,22 @@ class RunService:
                 logger=step_logger,
                 report_progress=report_progress,
                 quarantine=quarantine,
+                stats=step_stats,
             )
 
             try:
                 logger.info("Running step %s", step.label)
+                step_started_at = time.monotonic()
                 step.fn(context, step_files)
+                step_stats.record_step(
+                    "duration_ms",
+                    (time.monotonic() - step_started_at) * 1000,
+                )
             except Exception as error:
+                step_stats.record_step(
+                    "duration_ms",
+                    (time.monotonic() - step_started_at) * 1000,
+                )
                 logger.error("Run failed during step %s: %s", step.label, error)
                 manifest.upsert_step_state(step.step_id, StepRunStatus.FAILED, detail=str(error))
                 active_tracker.mark_failed(step.step_id, detail=str(error))
@@ -131,9 +146,25 @@ class RunService:
                     manifest,
                     RunStatus.FAILED,
                 )
+                self._record_run_statistics(
+                    stats_recorder,
+                    manifest,
+                    steps_completed=steps_completed,
+                    run_started_at=run_started_at,
+                )
                 raise
 
             if quarantine.has_quarantined_rows:
+                quarantine_row_count = sum(
+                    quarantine_store.read_rows(
+                        quarantine_store.quarantine_path(
+                            step.step_id,
+                            file.spec.__class__.ingest_name,
+                        )
+                    ).height
+                    for file in step_files
+                )
+                step_stats.record_step("rows_quarantined", quarantine_row_count)
                 manifest.upsert_step_state(
                     step.step_id,
                     StepRunStatus.QUARANTINED,
@@ -157,6 +188,12 @@ class RunService:
 
         final_status = RunStatus.FAILED if stop_reason else self._derive_run_status(manifest)
         self._persist_manifest(run_manager, store, run_directory, manifest, final_status)
+        self._record_run_statistics(
+            stats_recorder,
+            manifest,
+            steps_completed=steps_completed,
+            run_started_at=run_started_at,
+        )
 
         if final_status == RunStatus.QUARANTINED:
             active_tracker.set_status_message("Run quarantined")
@@ -230,6 +267,22 @@ class RunService:
                 output_path=file.active_path,
             )
             quarantine_store.truncate(quarantine_path)
+
+    def _record_run_statistics(
+        self,
+        stats_recorder: StatisticsRecorder,
+        manifest: RunManifest,
+        *,
+        steps_completed: int,
+        run_started_at: float,
+    ) -> None:
+        stats_recorder.record_run("steps_completed", steps_completed)
+        stats_recorder.record_run("duration_ms", (time.monotonic() - run_started_at) * 1000)
+        quarantined_step_count = sum(
+            1 for record in manifest.step_states if record.status == StepRunStatus.QUARANTINED
+        )
+        if quarantined_step_count:
+            stats_recorder.record_run("steps_quarantined", quarantined_step_count)
 
     def _derive_run_status(self, manifest: RunManifest) -> RunStatus:
         statuses = list(manifest.step_status_map().values())

@@ -14,6 +14,7 @@ from astro.pipeline.files import AstroFile, AstroFileSpec
 from astro.pipeline.models import ExecutionMode, IngestFileSpec
 from astro.pipeline.steps import StepContext
 from astro.run.service import RunService
+from astro.stats.models import StatScope
 from astro.storage.sqlite import PipelineStore
 from astro.working.manifest import RunStatus
 from astro.working.run_manager import RunManager
@@ -23,10 +24,11 @@ class EstablishmentsFile(AstroFileSpec):
     ingest_name = "establishments"
 
 
-def step_mark_processed(_ctx: StepContext, files: list[AstroFile]) -> None:
+def step_mark_processed(ctx: StepContext, files: list[AstroFile]) -> None:
     file = files[0]
     dataframe = file.load().with_columns(pl.lit("processed").alias("stage"))
     file.save_to("processed", "establishments.parquet", dataframe)
+    ctx.stats.record_run("rows_processed", dataframe.height)
 
 
 def step_validate_only(_ctx: StepContext, files: list[AstroFile]) -> None:
@@ -111,6 +113,20 @@ def test_run_service_executes_steps_and_marks_completed(
     store = PipelineStore(pipeline_dir / ".astro" / "stats.db")
     runs = store.list_runs(pipeline.name)
     assert runs[0]["status"] == RunStatus.COMPLETED.value
+
+    run_stats = store.list_stats(result.run_id, scope=StatScope.RUN)
+    run_stat_actions = {stat.action: stat.value for stat in run_stats}
+    assert run_stat_actions["steps_completed"] == 2
+    assert run_stat_actions["rows_processed"] == 1
+    assert "duration_ms" in run_stat_actions
+
+    step_stats = store.list_stats(
+        result.run_id,
+        scope=StatScope.STEP,
+        subject="mark-processed",
+        action="duration_ms",
+    )
+    assert len(step_stats) == 1
 
 
 def test_run_service_marks_failed_on_step_error(

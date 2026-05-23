@@ -7,8 +7,8 @@ import sys
 import time
 from collections.abc import Callable
 
-from rich.columns import Columns
 from rich.console import Console, Group, RenderableType
+from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TextColumn
@@ -16,6 +16,8 @@ from rich.text import Text
 
 from astro.cli.display.steps import StepStatus, StepTracker
 from astro.cli.logging import InMemoryLogBuffer
+
+MAX_VISIBLE_LOG_LINES = 25
 
 _STATUS_ICONS = {
     StepStatus.PENDING: ("○", "dim"),
@@ -36,10 +38,12 @@ class RunDashboard:
         buffer: InMemoryLogBuffer,
         *,
         console: Console | None = None,
+        max_log_lines: int = MAX_VISIBLE_LOG_LINES,
     ) -> None:
         self.tracker = tracker
         self.buffer = buffer
         self.console = console or Console()
+        self.max_log_lines = max_log_lines
 
     def render_once(self) -> None:
         self.console.print(self.build_layout())
@@ -68,16 +72,22 @@ class RunDashboard:
                 live.update(self.build_layout())
                 time.sleep(1 / refresh_per_second)
 
-    def build_layout(self) -> Group:
-        return Group(
-            Columns(
-                [self._build_steps_panel(), self._build_log_panel()],
-                expand=True,
-                equal=False,
-                column_first=True,
-            ),
-            self._build_status_panel(),
+    def build_layout(self) -> Layout:
+        status_size = 6 if self.tracker.progress_percent is not None else 4
+        layout = Layout()
+        layout.split_column(
+            Layout(name="main", ratio=1),
+            Layout(name="status", size=status_size),
         )
+        layout["main"].split_row(
+            Layout(self._build_steps_panel(), name="steps", ratio=1),
+            Layout(self._build_log_panel(), name="logs", ratio=1),
+        )
+        layout["status"].update(self._build_status_panel())
+        return layout
+
+    def _log_line_max_width(self) -> int:
+        return max(24, (self.console.width // 2) - 4)
 
     def _build_steps_panel(self) -> Panel:
         step_lines: list[Text] = []
@@ -90,7 +100,8 @@ class RunDashboard:
         return Panel(Group(*step_lines), title="Steps", border_style="blue")
 
     def _build_log_panel(self) -> Panel:
-        lines = [self._format_log_record(record) for record in self.buffer.records]
+        records = list(self.buffer.records)[-self.max_log_lines :]
+        lines = [self._format_log_record(record) for record in records]
         if not lines:
             lines = [Text("Waiting for log output...", style="dim")]
         return Panel(Group(*lines), title="Live log", border_style="blue", expand=True)
@@ -108,7 +119,11 @@ class RunDashboard:
             formatter.formatTime(record, "%H:%M:%S") if formatter is not None else "--:--:--"
         )
         level = record.levelname
-        return Text(f"{timestamp} {level:<8} {message}", style=style)
+        line = f"{timestamp} {level:<8} {message}"
+        max_width = self._log_line_max_width()
+        if len(line) > max_width:
+            line = line[: max_width - 1] + "…"
+        return Text(line, style=style)
 
     def _build_status_panel(self) -> Panel:
         message = self.tracker.status_message or "Ready"
