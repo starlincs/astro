@@ -47,3 +47,24 @@ def test_materialize_raises_when_pandera_validation_fails(
 
     with pytest.raises((SchemaError, SchemaErrors)):
         materialize_ingest_file(matched, ingest_directory=tmp_path / "ingested")
+
+
+def test_materialize_reads_cp1252_encoded_csv(tmp_path: Path) -> None:
+    csv_path = tmp_path / "edubase20260313.csv"
+    csv_path.write_bytes("URN,EstablishmentName\n1,St Paul\u2019s School\n".encode("cp1252"))
+    spec = IngestFileSpec(
+        name="establishments",
+        source_pattern="edubase*.csv",
+        encoding="windows-1252",
+        schema=pa.DataFrameSchema(
+            {"URN": pa.Column(str), "EstablishmentName": pa.Column(str)},
+            strict="filter",
+        ),
+    )
+    matched = MatchedIngestFile(spec=spec, source_path=csv_path)
+    ingest_directory = tmp_path / "ingested"
+
+    materialized = materialize_ingest_file(matched, ingest_directory=ingest_directory)
+
+    loaded = pl.read_parquet(materialized.record.parquet_path)
+    assert loaded["EstablishmentName"][0] == "St Paul\u2019s School"

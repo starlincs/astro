@@ -24,7 +24,11 @@ def materialize_ingest_file(
 ) -> MaterializedIngestFile:
     ingest_directory.mkdir(parents=True, exist_ok=True)
     source_path = matched_file.source_path
-    dataframe = pl.read_csv(source_path, infer_schema_length=0)
+    dataframe = pl.read_csv(
+        source_path,
+        infer_schema_length=0,
+        encoding=matched_file.spec.encoding,
+    )
     validated = matched_file.spec.schema.validate(dataframe)
     parquet_path = ingest_directory / f"{matched_file.spec.name}.parquet"
     validated.write_parquet(parquet_path)

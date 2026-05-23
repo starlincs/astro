@@ -1,6 +1,7 @@
 """Discover and load pipeline.py from external project directories."""
 
 import importlib.util
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -27,6 +28,10 @@ def load_pipeline_module(directory: Path | None = None) -> ModuleType | None:
     spec = importlib.util.spec_from_file_location("astro_user_pipeline", pipeline_path)
     if spec is None or spec.loader is None:
         return None
+
+    pipeline_directory = str(pipeline_path.parent.resolve())
+    if pipeline_directory not in sys.path:
+        sys.path.insert(0, pipeline_directory)
 
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

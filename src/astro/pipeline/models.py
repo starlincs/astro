@@ -23,6 +23,7 @@ class IngestFileSpec:
     name: str
     source_pattern: str
     schema: pa.DataFrameSchema
+    encoding: str = "utf-8"
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -33,3 +34,5 @@ class IngestFileSpec:
             )
         if not self.source_pattern:
             raise ValueError("Ingest source_pattern must not be empty.")
+        if not self.encoding:
+            raise ValueError("Ingest encoding must not be empty.")
