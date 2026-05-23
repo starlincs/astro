@@ -1,0 +1,31 @@
+---
+description: Test-first development workflow for Astro
+alwaysApply: true
+---
+
+# Test-first development
+
+Before changing `src/astro/`:
+
+1. Add or update a failing test in `tests/`
+2. Run `pytest path/to/test.py` and confirm red
+3. Implement minimal code to pass
+4. Run `make check` before completing
+
+## Requirements
+
+- Use [SPEC.md](SPEC.md) for expected behaviour
+- Do not skip tests for stub or "obvious" commands
+- Place CLI tests in `tests/cli/`, pipeline tests in `tests/pipeline/`
+- Mark integration tests with `@pytest.mark.integration`
+
+## Example
+
+```python
+# tests/cli/test_commands.py — write this first
+def test_ingest_loads_pipeline(cli_runner, pipeline_directory):
+    result = cli_runner.invoke(app, ["ingest", str(csv_path), "-C", str(pipeline_directory)])
+    assert result.exit_code == 0
+```
+
+Then implement in `src/astro/cli/main.py`.

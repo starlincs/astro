@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "astro"
+version = "0.1.0"
+description = "CLI tool and library for CSV import pipelines"
+requires-python = ">=3.11"
+dependencies = [
+    "polars>=1.0",
+    "pydantic>=2.0",
+    "pandera>=0.20",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=4.0",
+    "pytest-cov>=6.0",
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "ty>=0.0.1",
+]
+
+[project.scripts]
+astro = "astro.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/astro"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=astro --cov-report=term-missing --cov-fail-under=80"
+markers = [
+    "integration: tests needing external fixtures or full pipeline dirs",
+]
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+source = ["astro"]
+
+[tool.coverage.report]
+fail_under = 80
+exclude_lines = [
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ty.src]
+include = ["src/astro"]
