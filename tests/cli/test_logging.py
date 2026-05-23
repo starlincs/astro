@@ -46,6 +46,37 @@ def test_console_and_file_mode_writes_log_file(tmp_path: Path) -> None:
     assert "command=ingest" in content
 
 
+def test_console_formatter_uses_display_message_for_statistics(tmp_path: Path) -> None:
+    from astro.cli.logging import AstroDisplayFormatter
+
+    log_file = tmp_path / LOG_FILENAME
+    logger = logging.getLogger("astro.test.stat_display")
+
+    with setup_astro_logging(LogMode.CONSOLE_AND_FILE, log_file=log_file):
+        logger.info(
+            "STAT run=abcde scope=file subject=establishments action=row_count value=10",
+            extra={"astro_display_message": "Stat · establishments · row count · 10"},
+        )
+
+    machine_message = "STAT run=abcde scope=file subject=establishments action=row_count value=10"
+    file_content = log_file.read_text(encoding="utf-8")
+    assert machine_message in file_content
+    assert "Stat · establishments · row count · 10" not in file_content
+
+    formatter = AstroDisplayFormatter()
+    record = logging.LogRecord(
+        name="astro.stats",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg="STAT run=abcde scope=file subject=establishments action=row_count value=10",
+        args=(),
+        exc_info=None,
+    )
+    record.astro_display_message = "Stat · establishments · row count · 10"
+    assert formatter.format(record) == "Stat · establishments · row count · 10"
+
+
 def test_file_and_buffer_mode_populates_buffer(tmp_path: Path) -> None:
     log_file = tmp_path / LOG_FILENAME
     logger = logging.getLogger("astro.test.buffer_mode")

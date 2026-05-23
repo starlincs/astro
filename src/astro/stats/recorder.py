@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from astro.stats.formatting import format_stat_display_message, format_stat_log_message
 from astro.stats.models import StatScope
 from astro.storage.sqlite import PipelineStore
 
@@ -60,12 +61,20 @@ class StatisticsRecorder:
             raise TypeError("value must be int or float.")
 
         self._store.record_stat(self._run_id, scope, subject, action, float(value))
-        subject_label = subject or "-"
         logger.info(
-            "STAT run=%s scope=%s subject=%s action=%s value=%s",
-            self._run_id,
-            scope.value,
-            subject_label,
-            action,
-            value,
+            format_stat_log_message(
+                run_id=self._run_id,
+                scope=scope,
+                subject=subject,
+                action=action,
+                value=value,
+            ),
+            extra={
+                "astro_display_message": format_stat_display_message(
+                    scope=scope,
+                    subject=subject,
+                    action=action,
+                    value=value,
+                )
+            },
         )

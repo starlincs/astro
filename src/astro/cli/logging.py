@@ -43,6 +43,16 @@ class PlainLogFormatter(logging.Formatter):
         )
 
 
+class AstroDisplayFormatter(logging.Formatter):
+    """Use human-readable display text on CLI surfaces when available."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        display_message = getattr(record, "astro_display_message", None)
+        if display_message is not None:
+            return display_message
+        return record.getMessage()
+
+
 class AstroLoggingContext(AbstractContextManager["AstroLoggingContext"]):
     """Manage Astro logger handlers for one CLI command invocation."""
 
@@ -76,6 +86,7 @@ class AstroLoggingContext(AbstractContextManager["AstroLoggingContext"]):
                 markup=True,
                 rich_tracebacks=False,
             )
+            console_handler.setFormatter(AstroDisplayFormatter())
             console_handler.setLevel(self.level)
             self.logger.addHandler(console_handler)
             self._handlers.append(console_handler)
@@ -91,7 +102,7 @@ class AstroLoggingContext(AbstractContextManager["AstroLoggingContext"]):
             self._handlers.append(file_handler)
 
         if self.mode == LogMode.FILE_AND_BUFFER:
-            self.buffer.setFormatter(plain_formatter)
+            self.buffer.setFormatter(AstroDisplayFormatter())
             self.buffer.setLevel(self.level)
             self.logger.addHandler(self.buffer)
             self._handlers.append(self.buffer)

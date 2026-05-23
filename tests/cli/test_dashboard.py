@@ -163,17 +163,17 @@ def test_dashboard_keeps_panels_side_by_side_with_long_log_lines() -> None:
     long_message = "STAT run=abcde scope=file subject=establishments action=row_count value=1 " + (
         "x" * 200
     )
-    buffer.emit(
-        logging.LogRecord(
-            name="astro.stats",
-            level=logging.INFO,
-            pathname=__file__,
-            lineno=1,
-            msg=long_message,
-            args=(),
-            exc_info=None,
-        )
+    record = logging.LogRecord(
+        name="astro.stats",
+        level=logging.INFO,
+        pathname=__file__,
+        lineno=1,
+        msg=long_message,
+        args=(),
+        exc_info=None,
     )
+    record.astro_display_message = "Stat · establishments · row count · 1"
+    buffer.emit(record)
 
     output = StringIO()
     dashboard = RunDashboard(tracker, buffer, console=Console(file=output, width=100, height=50))

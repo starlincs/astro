@@ -16,6 +16,7 @@ from rich.text import Text
 
 from astro.cli.display.steps import StepStatus, StepTracker
 from astro.cli.logging import InMemoryLogBuffer
+from astro.stats.formatting import log_record_display_message
 
 MAX_VISIBLE_LOG_LINES = 25
 
@@ -107,7 +108,7 @@ class RunDashboard:
         return Panel(Group(*lines), title="Live log", border_style="blue", expand=True)
 
     def _format_log_record(self, record: logging.LogRecord) -> Text:
-        message = record.getMessage()
+        message = log_record_display_message(record) or record.getMessage()
         if record.levelno >= logging.ERROR:
             style = "red"
         elif record.levelno >= logging.WARNING:
