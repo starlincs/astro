@@ -68,3 +68,30 @@ def test_materialize_reads_cp1252_encoded_csv(tmp_path: Path) -> None:
 
     loaded = pl.read_parquet(materialized.record.parquet_path)
     assert loaded["EstablishmentName"][0] == "St Paul\u2019s School"
+
+
+def test_materialize_reads_headerless_csv_with_column_names(tmp_path: Path) -> None:
+    csv_path = tmp_path / "paf.csv"
+    csv_path.write_text("AB10 1AB,ABERDEEN,52447276\n", encoding="utf-8")
+    spec = IngestFileSpec(
+        name="raw_paf",
+        source_pattern="paf.csv",
+        has_header=False,
+        column_names=("postcode", "post_town", "udprn"),
+        schema=pa.DataFrameSchema(
+            {
+                "postcode": pa.Column(str),
+                "post_town": pa.Column(str),
+                "udprn": pa.Column(str),
+            },
+            strict="filter",
+        ),
+    )
+    matched = MatchedIngestFile(spec=spec, source_path=csv_path)
+    ingest_directory = tmp_path / "ingested"
+
+    materialized = materialize_ingest_file(matched, ingest_directory=ingest_directory)
+
+    loaded = pl.read_parquet(materialized.record.parquet_path)
+    assert loaded.columns == ["postcode", "post_town", "udprn"]
+    assert loaded["postcode"][0] == "AB10 1AB"

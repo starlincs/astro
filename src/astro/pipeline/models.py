@@ -29,6 +29,8 @@ class IngestFileSpec:
     source_pattern: str
     schema: pa.DataFrameSchema
     encoding: str = "utf-8"
+    has_header: bool = True
+    column_names: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -41,3 +43,5 @@ class IngestFileSpec:
             raise ValueError("Ingest source_pattern must not be empty.")
         if not self.encoding:
             raise ValueError("Ingest encoding must not be empty.")
+        if not self.has_header and not self.column_names:
+            raise ValueError("Headerless ingest requires column_names.")
