@@ -19,12 +19,16 @@ ProgressCallback = Callable[[float | None], None]
 
 
 class StepKind(StrEnum):
+    """Kind of registered pipeline step."""
+
     STEP = "step"
     FILTER = "filter"
 
 
 @dataclass(frozen=True)
 class StepDefinition:
+    """Registered pipeline step metadata and callable."""
+
     step_id: str
     label: str
     fn: StepFn
@@ -35,6 +39,20 @@ class StepDefinition:
 
 @dataclass(frozen=True)
 class StepContext:
+    """Execution context passed to each pipeline step function.
+
+    Attributes:
+        pipeline_dir: Directory containing ``pipeline.py``.
+        run_directory: ``.working/{run_id}/`` path for the current run.
+        run_id: Current run identifier.
+        run_date: Date assigned to the run.
+        step_id: Current step identifier.
+        logger: Step-scoped logger.
+        report_progress: Callback to update dashboard progress.
+        quarantine: Collector for quarantining invalid rows.
+        stats: Recorder for run, file, and step statistics.
+    """
+
     pipeline_dir: Path
     run_directory: Path
     run_id: str

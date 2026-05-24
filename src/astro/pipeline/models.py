@@ -12,11 +12,15 @@ _SAFE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 class ExecutionMode(StrEnum):
+    """Ingest concurrency mode."""
+
     SERIAL = "serial"
     PARALLEL = "parallel"
 
 
 class StepExecutionMode(StrEnum):
+    """Run-step scheduling mode within a single pipeline run."""
+
     SERIAL = "serial"
     PARALLEL = "parallel"
 

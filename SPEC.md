@@ -1,5 +1,7 @@
 # Astro specification
 
+> **User documentation:** Installation guides, tutorials, and API reference are in [`docs/`](docs/) and published at [https://astro.readthedocs.io](https://astro.readthedocs.io). This document is the behavioural specification for implementers and agents.
+
 ## What this is
 
 Astro is a Python CLI tool and library for importing and processing CSV files through user-defined pipelines.
@@ -425,8 +427,8 @@ Resolution is vectorized with Polars joins and expressions. UUID assignment loop
 | `astro ingest SOURCE_DIR` | Create a run, validate source files, materialize Parquet |
 | `astro run [--run-id ID] [--mode dashboard\|cli]` | Execute registered pipeline steps on an ingested run |
 | `astro describe` | Display the pipeline steps as a terminal flow diagram |
-| `astro list` | List registered pipelines and their statistics (not implemented) |
-| `astro cleanup [--all]` | Remove stored pipeline data (not implemented) |
+| `astro list` | List stored pipeline runs and their statistics |
+| `astro cleanup [--all] [--dry-run] [--yes]` | Remove completed/failed runs; `--all` also clears statistics and persistent stores |
 
 All commands accept `-C / --pipeline-dir` to point at the directory containing `pipeline.py` (defaults to the current directory).
 
@@ -440,4 +442,4 @@ Before merging or completing work:
 
 ## Current status
 
-`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization (including batched large-file ingest), SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps serially by default or in parallel when configured via `step_execution_mode`, with batched filter/quarantine paths for large files, dashboard or CLI display, row quarantine, row filtering, retry for quarantined runs, and automatic statistics recording. `astro describe` prints a terminal flow diagram of ingest and run steps. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.
+`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization (including batched large-file ingest), SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps serially by default or in parallel when configured via `step_execution_mode`, with batched filter/quarantine paths for large files, dashboard or CLI display, row quarantine, row filtering, retry for quarantined runs, and automatic statistics recording. `astro describe` prints a terminal flow diagram of ingest and run steps. `astro list` displays stored runs from SQLite. `astro cleanup` removes completed/failed run directories and optionally all stored data. The canonical ID resolver library is implemented as a separate importable module.

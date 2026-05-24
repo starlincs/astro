@@ -4,9 +4,27 @@ build-backend = "hatchling.build"
 
 [project]
 name = "astro"
-version = "0.1.0"
+dynamic = ["version"]
 description = "CLI tool and library for CSV import pipelines"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
+authors = [{ name = "Tom" }]
+maintainers = [{ name = "Tom" }]
+keywords = ["etl", "csv", "pipeline", "polars", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: System :: Archiving",
+    "Typing :: Typed",
+]
 dependencies = [
     "polars>=1.0",
     "pyarrow>=16.0",
@@ -22,11 +40,29 @@ dev = [
     "pytest-cov>=6.0",
     "pytest>=8.0",
     "ruff>=0.4",
-    "ty>=0.0.1",
+    "ty>=0.0.1,<0.1",
+    "hypothesis>=6.0",
+    "build>=1.0",
 ]
+docs = [
+    "sphinx>=8.0",
+    "myst-parser>=4.0",
+    "furo>=2024.0",
+    "sphinx-autobuild>=2024.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/starlincs/astro"
+Documentation = "https://astro.readthedocs.io"
+Repository = "https://github.com/starlincs/astro"
+Issues = "https://github.com/starlincs/astro/issues"
+Changelog = "https://github.com/starlincs/astro/blob/main/CHANGELOG.md"
 
 [project.scripts]
 astro = "astro.cli.main:app"
+
+[tool.hatch.version]
+path = "src/astro/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/astro"]
@@ -39,11 +75,12 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "D101"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "RUF012"]
+"tests/**" = ["S101", "RUF012", "D101"]
 "examples/**" = ["RUF012"]
+"src/astro/cli/display/flow.py" = ["D101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

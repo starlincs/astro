@@ -36,7 +36,21 @@ class IngestedSource:
 
 
 class Pipeline(ABC):
-    """Base class for CSV import pipelines defined in external repositories."""
+    """Base class for CSV import pipelines defined in external repositories.
+
+    Subclass ``Pipeline``, define ``ingest_files``, implement ``configure_steps()``,
+    and export a module-level ``pipeline`` instance from ``pipeline.py``.
+
+    Attributes:
+        name: Pipeline identifier stored in statistics.
+        execution_mode: Ingest concurrency rules (``serial`` or ``parallel``).
+        step_execution_mode: Run-step scheduling (``serial`` or ``parallel``).
+        max_parallel_workers: Cap on concurrent run steps when parallel.
+        large_file_threshold_bytes: Size above which batched I/O paths are used.
+        ingest_batch_size: CSV rows per batch during large-file ingest.
+        run_batch_size: Parquet rows per batch during filter and ``iter_batches()``.
+        ingest_files: Expected source file patterns and Pandera schemas.
+    """
 
     name: str = "pipeline"
     execution_mode: ExecutionMode = ExecutionMode.SERIAL
@@ -63,7 +77,7 @@ class Pipeline(ABC):
             raise ValueError(f"{self.__class__.__name__} must define at least one run step.")
 
     def configure_steps(self) -> None:  # noqa: B027
-        """Register run steps via ``add_step``."""
+        """Register run steps via ``add_step`` and ``add_filter``."""
 
     def add_step(
         self,
@@ -75,6 +89,16 @@ class Pipeline(ABC):
         depends_on: Sequence[str] | None = None,
         kind: StepKind = StepKind.STEP,
     ) -> None:
+        """Register a custom run step.
+
+        Args:
+            label: Human-readable step name shown in the dashboard and logs.
+            fn: Step function receiving ``(StepContext, list[AstroFile])``.
+            files: ``AstroFileSpec`` subclasses this step reads and writes.
+            step_id: Optional explicit step id (defaults to slugified label).
+            depends_on: Step ids that must complete before this step runs.
+            kind: Step kind (``step`` or ``filter``); use ``add_filter`` for filters.
+        """
         if not files:
             raise ValueError("Each step must reference at least one AstroFileSpec.")
 
@@ -121,6 +145,15 @@ class Pipeline(ABC):
         step_id: str | None = None,
         depends_on: Sequence[str] | None = None,
     ) -> None:
+        """Register a filter step that removes rows from one or more files.
+
+        Args:
+            label: Human-readable filter name.
+            fn: Filter function returning **removed** rows, or a Polars expression predicate.
+            files: ``AstroFileSpec`` subclasses to filter.
+            step_id: Optional explicit step id (defaults to slugified label).
+            depends_on: Step ids that must complete before this filter runs.
+        """
         from astro.filter.executor import apply_filter_step, apply_predicate_filter_step
 
         if isinstance(fn, pl.Expr):

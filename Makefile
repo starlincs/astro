@@ -1,4 +1,4 @@
-.PHONY: check lint format typecheck test fix cov-html
+.PHONY: check lint format typecheck test fix cov cov-html docs docs-serve
 
 check: lint format typecheck test
 
@@ -14,9 +14,18 @@ typecheck:
 test:
 	pytest
 
+cov:
+	pytest -m ""
+
 fix:
 	ruff check --fix src tests
 	ruff format src tests
 
 cov-html:
 	pytest --cov=astro --cov-report=html
+
+docs:
+	sphinx-build -b html docs docs/_build/html
+
+docs-serve:
+	sphinx-autobuild docs docs/_build/html --open-browser

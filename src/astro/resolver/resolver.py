@@ -29,7 +29,10 @@ _STORED_SUFFIX = "_stored"
 
 
 class CanonicalIdResolver:
-    """Map source keys to canonical UUIDs and detect grouped field changes."""
+    """Map source keys to canonical UUIDs and detect grouped field changes.
+
+    Stores persistent state at ``{pipeline_dir}/.persistent/{name}.parquet``.
+    """
 
     def __init__(
         self,
@@ -37,6 +40,13 @@ class CanonicalIdResolver:
         name: str,
         hash_groups: HashGroupsConfig,
     ) -> None:
+        """Create a resolver scoped to a named persistent store.
+
+        Args:
+            pipeline_dir: Pipeline working directory.
+            name: Store name (for example ``establishments``).
+            hash_groups: Mapping of group names to ``"*all"`` or field name lists.
+        """
         self._config = ResolverConfig(name=name, hash_groups=hash_groups)
         self.hash_groups = hash_groups
         self._store = ResolverStore(pipeline_dir, name, hash_groups)
@@ -54,6 +64,19 @@ class CanonicalIdResolver:
         run_date: date,
         exclude_columns: frozenset[str] = frozenset(),
     ) -> pl.DataFrame:
+        """Resolve canonical IDs and change flags for each row in ``data``.
+
+        Args:
+            data: Input DataFrame containing ``source_key_column``.
+            source_key_column: Column with pipeline-provided identifiers.
+            namespace: Prefix for stored keys as ``{namespace}:{source_key}``.
+            run_date: Date used for change tracking.
+            exclude_columns: Columns excluded from ``"*all"`` hash groups.
+
+        Returns:
+            DataFrame augmented with ``canonical_id``, ``status``, and
+            ``{group}_changed`` columns.
+        """
         self._validate_input(data, source_key_column=source_key_column, namespace=namespace)
 
         working = compute_hash_columns(

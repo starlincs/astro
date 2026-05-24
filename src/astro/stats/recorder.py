@@ -26,9 +26,11 @@ class StatisticsRecorder:
         self._step_id = step_id
 
     def record_run(self, action: str, value: int | float) -> None:
+        """Record a run-scoped statistic."""
         self._record(StatScope.RUN, None, action, value)
 
     def record_file(self, file_name: str, action: str, value: int | float) -> None:
+        """Record a file-scoped statistic keyed by ingest file name."""
         if not file_name:
             raise ValueError("file_name must not be empty.")
         self._record(StatScope.FILE, file_name, action, value)
@@ -40,6 +42,7 @@ class StatisticsRecorder:
         *,
         step_id: str | None = None,
     ) -> None:
+        """Record a step-scoped statistic for the current or given step."""
         resolved_step_id = step_id or self._step_id
         if not resolved_step_id:
             raise ValueError("step_id is required when recording step statistics.")

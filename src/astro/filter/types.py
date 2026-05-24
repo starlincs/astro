@@ -7,3 +7,4 @@ from collections.abc import Callable
 import polars as pl
 
 FilterFn = Callable[[pl.DataFrame], pl.DataFrame]
+"""Callable that receives input rows and returns removed rows only."""
