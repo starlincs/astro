@@ -27,6 +27,18 @@ _PYARROW_ENCODING_ALIASES = {
 IngestBatchCallback = Callable[[int, int | None], None]
 
 
+def _apply_schema_overrides(dataframe: pl.DataFrame, spec: IngestFileSpec) -> pl.DataFrame:
+    schema_overrides = pandera_schema_overrides(spec.schema)
+    casts = [
+        pl.col(column_name).cast(dtype)
+        for column_name, dtype in schema_overrides.items()
+        if column_name in dataframe.columns
+    ]
+    if not casts:
+        return dataframe
+    return dataframe.with_columns(casts)
+
+
 def polars_encoding(encoding: str) -> str:
     return _POLARS_ENCODING_ALIASES.get(encoding.lower(), encoding)
 
@@ -155,22 +167,28 @@ def _iter_csv_batches_pyarrow(
     on_batch: IngestBatchCallback | None,
     estimated_total_rows: int | None,
 ) -> Iterator[pl.DataFrame]:
+    column_names = list(spec.column_names or spec.schema.columns.keys())
     parse_options = pacsv.ParseOptions(newlines_in_values=True)
-    if not spec.has_header:
-        parse_options = pacsv.ParseOptions(
-            newlines_in_values=True,
-            column_names=list(spec.column_names or spec.schema.columns.keys()),
+    if spec.has_header:
+        read_options = pacsv.ReadOptions(
+            encoding=encoding,
+            block_size=max(batch_size * 256, 1024 * 1024),
+            skip_rows=1,
+            column_names=column_names,
         )
-    read_options = pacsv.ReadOptions(
-        encoding=encoding,
-        block_size=max(batch_size * 256, 1024 * 1024),
-        skip_rows=1 if spec.has_header else 0,
-    )
+    else:
+        read_options = pacsv.ReadOptions(
+            encoding=encoding,
+            block_size=max(batch_size * 256, 1024 * 1024),
+            skip_rows=0,
+            column_names=column_names,
+        )
     reader = pacsv.open_csv(
         source_path,
         read_options=read_options,
         parse_options=parse_options,
     )
+    schema_overrides = pandera_schema_overrides(spec.schema)
 
     pending_frames: list[pl.DataFrame] = []
     pending_rows = 0
@@ -180,6 +198,8 @@ def _iter_csv_batches_pyarrow(
         chunk = cast(pl.DataFrame, pl.from_arrow(record_batch))
         if chunk.is_empty():
             continue
+        if schema_overrides:
+            chunk = _apply_schema_overrides(chunk, spec)
         pending_frames.append(chunk)
         pending_rows += chunk.height
 

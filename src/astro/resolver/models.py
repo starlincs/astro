@@ -15,6 +15,8 @@ _SAFE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 class EntryStatus(StrEnum):
+    """Resolver outcome for one source key."""
+
     NEW = "NEW"
     UNCHANGED = "UNCHANGED"
     CHANGED = "CHANGED"

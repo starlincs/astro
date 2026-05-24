@@ -8,6 +8,8 @@ from enum import StrEnum
 
 
 class StatScope(StrEnum):
+    """Statistics aggregation scope."""
+
     RUN = "run"
     FILE = "file"
     STEP = "step"
@@ -15,6 +17,8 @@ class StatScope(StrEnum):
 
 @dataclass(frozen=True)
 class StatRecord:
+    """One persisted statistics row."""
+
     run_id: str
     scope: StatScope
     subject: str | None

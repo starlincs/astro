@@ -122,6 +122,12 @@ View the pipeline flow diagram:
 astro describe
 ```
 
+List stored runs:
+
+```bash
+astro list
+```
+
 ## Next steps
 
 - {doc}`../user-guide/pipelines` — pipeline configuration in depth

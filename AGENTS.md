@@ -23,7 +23,8 @@ Use [SPEC.md](SPEC.md) for behavioural requirements. If implementation and spec 
 2. Add or update a failing test in `tests/`
 3. Run `pytest path/to/test.py` and confirm it fails for the expected reason
 4. Implement the minimal change in `src/astro/`
-5. Run `make check` and confirm all gates pass
+5. Update user docs, `SPEC.md`, and `CHANGELOG.md` when behaviour changes (see `.cursor/rules/document-everything.mdc`)
+6. Run `make check` and confirm all gates pass
 
 Do not implement features without a failing test first. Do not skip tests because a command is a stub.
 

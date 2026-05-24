@@ -31,14 +31,16 @@ examples/      Sample pipeline.py
 
 See {doc}`development-setup` for installation and {doc}`testing` for the test-first workflow.
 
+When behaviour changes, update user docs and `SPEC.md` in the same change (see `.cursor/rules/document-everything.mdc`).
+
+## Releasing
+
+See {doc}`release` for version bumps, building wheels, and publishing to PyPI.
+
 ## Documentation
 
 See {doc}`documentation` for building docs locally and publishing to Read the Docs.
 
-## Unimplemented commands
-
-`astro list` and `astro cleanup` are stubs. Do not skip tests for unimplemented behaviour — write tests first, then implement.
-
 ## License
 
-Astro does not yet include a LICENSE file. Check with maintainers before distributing or contributing under specific terms.
+Astro is released under the MIT License. See `LICENSE` in the repository root.

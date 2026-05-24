@@ -21,6 +21,8 @@ logger = logging.getLogger("astro.ingest")
 
 @dataclass(frozen=True)
 class IngestResult:
+    """Outcome of a successful CLI ingest."""
+
     run_id: str
     run_directory: Path
     ingested_files: list[str]
@@ -105,8 +107,12 @@ class IngestService:
                     matched_file.spec.name,
                     materialized.record.row_count,
                 )
-        except (IngestValidationError, Exception) as error:
-            logger.error("Ingest failed: %s", error)
+        except IngestValidationError as error:
+            logger.error("Ingest validation failed: %s", error, exc_info=True)
+            self._mark_failed(run_directory)
+            raise
+        except Exception as error:
+            logger.error("Ingest failed: %s", error, exc_info=True)
             self._mark_failed(run_directory)
             raise
 

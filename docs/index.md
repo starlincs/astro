@@ -46,11 +46,12 @@ contributing/development-setup
 contributing/testing
 contributing/code-style
 contributing/documentation
+contributing/release
 ```
 
 ## Quick links
 
-- {doc}`getting-started/installation` — install Astro from source
+- {doc}`getting-started/installation` — install Astro from PyPI or source
 - {doc}`getting-started/quickstart` — ingest and run your first pipeline
 - {doc}`user-guide/pipelines` — define a `pipeline.py`
 - {doc}`user-guide/cli` — CLI command reference

@@ -26,12 +26,14 @@ Do not implement features without a failing test first. Do not skip tests becaus
 | `tests/storage/` | `PipelineStore` behaviour |
 | `tests/resolver/` | Canonical ID resolver |
 | `tests/stats/` | Statistics recorder |
+| `tests/working/` | Run manager, manifest, and cleanup |
 | `tests/test_import.py` | Package smoke tests |
 
 ## Running tests
 
 ```bash
 make test                    # full suite with coverage
+make cov                     # include large-file integration tests
 pytest tests/cli/ -q         # single directory
 pytest -k "test_ingest" -q   # by name pattern
 make cov-html                # HTML coverage report

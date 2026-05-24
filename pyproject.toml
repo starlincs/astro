@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "astro"
+name = "astro-pipeline"
 dynamic = ["version"]
 description = "CLI tool and library for CSV import pipelines"
 readme = "README.md"
@@ -13,7 +13,7 @@ authors = [{ name = "Tom" }]
 maintainers = [{ name = "Tom" }]
 keywords = ["etl", "csv", "pipeline", "polars", "cli"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
@@ -43,6 +43,7 @@ dev = [
     "ty>=0.0.1,<0.1",
     "hypothesis>=6.0",
     "build>=1.0",
+    "twine>=6.0",
 ]
 docs = [
     "sphinx>=8.0",
@@ -57,6 +58,7 @@ Documentation = "https://astro.readthedocs.io"
 Repository = "https://github.com/starlincs/astro"
 Issues = "https://github.com/starlincs/astro/issues"
 Changelog = "https://github.com/starlincs/astro/blob/main/CHANGELOG.md"
+Download = "https://pypi.org/project/astro-pipeline/"
 
 [project.scripts]
 astro = "astro.cli.main:app"

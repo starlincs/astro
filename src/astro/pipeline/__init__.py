@@ -1,6 +1,6 @@
 """Pipeline discovery and execution."""
 
-from astro.pipeline.base import IngestedSource, Pipeline
+from astro.pipeline.base import Pipeline
 from astro.pipeline.discovery import discover_pipeline, load_pipeline_module
 from astro.pipeline.files import AstroFile, AstroFileSpec
 from astro.pipeline.models import ExecutionMode, IngestFileSpec, StepExecutionMode
@@ -11,7 +11,6 @@ __all__ = [
     "AstroFileSpec",
     "ExecutionMode",
     "IngestFileSpec",
-    "IngestedSource",
     "Pipeline",
     "StepContext",
     "StepDefinition",

@@ -14,6 +14,7 @@ from rich.progress import BarColumn, Progress, TaskID, TextColumn, TimeElapsedCo
 from astro.cli.display.dashboard import RunDashboard
 from astro.cli.display.flow import render_flow_diagram
 from astro.cli.display.steps import build_run_tracker
+from astro.cli.list_runs import render_run_list
 from astro.cli.logging import (
     LogMode,
     get_run_log_path,
@@ -25,6 +26,7 @@ from astro.ingest import IngestService, IngestValidationError
 from astro.pipeline.discovery import discover_pipeline, get_pipeline_instance
 from astro.run import RunService
 from astro.working import SerialIngestConflictError
+from astro.working.cleanup import execute_cleanup, plan_cleanup
 
 app = typer.Typer(
     name="astro",
@@ -33,20 +35,61 @@ app = typer.Typer(
 )
 
 logger = logging.getLogger("astro.cli")
+_debug_mode = False
 
 
 class DisplayMode(StrEnum):
+    """Run command display modes."""
+
     DASHBOARD = "dashboard"
     CLI = "cli"
+
+
+@app.callback()
+def main_callback(
+    debug: Annotated[
+        bool,
+        typer.Option(
+            "--debug",
+            help="Enable debug logging and include tracebacks in error output.",
+        ),
+    ] = False,
+) -> None:
+    """Global options for Astro commands."""
+    global _debug_mode
+    _debug_mode = debug
+    if debug:
+        logging.getLogger("astro").setLevel(logging.DEBUG)
 
 
 def _resolve_pipeline_dir(pipeline_dir: Path | None) -> Path:
     return pipeline_dir or Path.cwd()
 
 
-def _exit_with_logged_error(message: str, *, code: int = 1) -> None:
-    logger.error(message)
-    raise typer.Exit(code=code)
+def _logging_level() -> int:
+    return logging.DEBUG if _debug_mode else logging.INFO
+
+
+def _require_pipeline(search_dir: Path):
+    if discover_pipeline(search_dir) is None:
+        _exit_with_logged_error(f"No pipeline.py found in {search_dir}")
+    pipeline = get_pipeline_instance(search_dir)
+    if pipeline is None:
+        _exit_with_logged_error("pipeline.py must export a Pipeline instance named 'pipeline'.")
+    return pipeline
+
+
+def _exit_with_logged_error(
+    message: str,
+    *,
+    code: int = 1,
+    error: BaseException | None = None,
+) -> None:
+    if error is not None and _debug_mode:
+        logger.exception(message)
+    else:
+        logger.error(message)
+    raise typer.Exit(code=code) from error
 
 
 def _execute_run(
@@ -64,13 +107,16 @@ def _execute_run(
     pipeline = get_pipeline_instance(search_dir)
     if pipeline is None:
         raise RunResolutionError("pipeline.py must export a Pipeline instance named 'pipeline'.")
-    assert pipeline is not None
 
     run_service = RunService()
     tracker = build_run_tracker(pipeline, manifest)
 
     if mode == DisplayMode.CLI:
-        with setup_astro_logging(LogMode.CONSOLE_AND_FILE, log_file=log_file):
+        with setup_astro_logging(
+            LogMode.CONSOLE_AND_FILE,
+            log_file=log_file,
+            level=_logging_level(),
+        ):
             write_session_separator(
                 log_file,
                 command="run",
@@ -86,7 +132,11 @@ def _execute_run(
             )
         return
 
-    with setup_astro_logging(LogMode.FILE_AND_BUFFER, log_file=log_file) as context:
+    with setup_astro_logging(
+        LogMode.FILE_AND_BUFFER,
+        log_file=log_file,
+        level=_logging_level(),
+    ) as context:
         write_session_separator(
             log_file,
             command="run",
@@ -140,23 +190,16 @@ def ingest(
 ) -> None:
     """Ingest source files into a new pipeline run."""
     search_dir = _resolve_pipeline_dir(pipeline_dir)
-    logging_context = setup_astro_logging(LogMode.CONSOLE_ONLY)
+    logging_context = setup_astro_logging(LogMode.CONSOLE_ONLY, level=_logging_level())
     logging_context.__enter__()
 
     try:
-        if discover_pipeline(search_dir) is None:
-            _exit_with_logged_error(f"No pipeline.py found in {search_dir}")
-
         if not path.exists():
             _exit_with_logged_error(f"Source path does not exist: {path}")
         if not path.is_dir():
             _exit_with_logged_error(f"Source path must be a directory: {path}")
 
-        pipeline = get_pipeline_instance(search_dir)
-        if pipeline is None:
-            _exit_with_logged_error("pipeline.py must export a Pipeline instance named 'pipeline'.")
-        assert pipeline is not None
-
+        pipeline = _require_pipeline(search_dir)
         service = IngestService(search_dir, pipeline)
         progress_tasks: dict[str, TaskID] = {}
 
@@ -204,11 +247,11 @@ def ingest(
                     on_ingest_progress=on_ingest_progress,
                 )
         except SerialIngestConflictError as error:
-            _exit_with_logged_error(str(error))
+            _exit_with_logged_error(str(error), error=error)
         except IngestValidationError as error:
-            _exit_with_logged_error(str(error))
+            _exit_with_logged_error(str(error), error=error)
         except Exception as error:
-            _exit_with_logged_error(f"Ingest failed: {error}")
+            _exit_with_logged_error(f"Ingest failed: {error}", error=error)
 
         logger.info(
             "Run %s created at %s with %s ingested file(s)",
@@ -253,8 +296,8 @@ def run(
     try:
         run_directory, manifest = resolve_run_directory(search_dir, run_id=run_id)
     except RunResolutionError as error:
-        with setup_astro_logging(LogMode.CONSOLE_ONLY):
-            _exit_with_logged_error(str(error))
+        with setup_astro_logging(LogMode.CONSOLE_ONLY, level=_logging_level()):
+            _exit_with_logged_error(str(error), error=error)
 
     log_file = get_run_log_path(run_directory)
     append = log_file.exists()
@@ -269,11 +312,11 @@ def run(
             append=append,
         )
     except RunResolutionError as error:
-        with setup_astro_logging(LogMode.CONSOLE_ONLY):
-            _exit_with_logged_error(str(error))
+        with setup_astro_logging(LogMode.CONSOLE_ONLY, level=_logging_level()):
+            _exit_with_logged_error(str(error), error=error)
     except Exception as error:
-        with setup_astro_logging(LogMode.CONSOLE_ONLY):
-            _exit_with_logged_error(f"Run failed: {error}")
+        with setup_astro_logging(LogMode.CONSOLE_ONLY, level=_logging_level()):
+            _exit_with_logged_error(f"Run failed: {error}", error=error)
 
 
 @app.command()
@@ -289,15 +332,8 @@ def describe(
 ) -> None:
     """Display the pipeline steps as a flow diagram."""
     search_dir = _resolve_pipeline_dir(pipeline_dir)
-    with setup_astro_logging(LogMode.CONSOLE_ONLY):
-        if discover_pipeline(search_dir) is None:
-            _exit_with_logged_error(f"No pipeline.py found in {search_dir}")
-
-        pipeline = get_pipeline_instance(search_dir)
-        if pipeline is None:
-            _exit_with_logged_error("pipeline.py must export a Pipeline instance named 'pipeline'.")
-        assert pipeline is not None
-
+    with setup_astro_logging(LogMode.CONSOLE_ONLY, level=_logging_level()):
+        pipeline = _require_pipeline(search_dir)
         typer.echo(render_flow_diagram(pipeline))
 
 
@@ -312,10 +348,10 @@ def list_pipelines(
         ),
     ] = None,
 ) -> None:
-    """List registered pipelines and their statistics."""
-    with setup_astro_logging(LogMode.CONSOLE_ONLY):
-        _resolve_pipeline_dir(pipeline_dir)
-        logger.warning("list: not implemented")
+    """List registered pipeline runs and their statistics."""
+    search_dir = _resolve_pipeline_dir(pipeline_dir)
+    with setup_astro_logging(LogMode.CONSOLE_ONLY, level=_logging_level()):
+        typer.echo(render_run_list(search_dir))
 
 
 @app.command()
@@ -332,17 +368,55 @@ def cleanup(
         bool,
         typer.Option(
             "--all",
-            help="Remove all stored pipeline statistics.",
+            help="Remove all runs plus statistics and persistent resolver stores.",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Show what would be removed without deleting anything.",
+        ),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Skip confirmation prompts.",
         ),
     ] = False,
 ) -> None:
-    """Clean up stored pipeline data and statistics."""
-    with setup_astro_logging(LogMode.CONSOLE_ONLY):
-        _resolve_pipeline_dir(pipeline_dir)
-        if all_runs:
-            logger.warning("cleanup --all: not implemented")
-        else:
-            logger.warning("cleanup: not implemented")
+    """Clean up completed or failed runs and optionally all stored data."""
+    search_dir = _resolve_pipeline_dir(pipeline_dir)
+    with setup_astro_logging(LogMode.CONSOLE_ONLY, level=_logging_level()):
+        cleanup_plan = plan_cleanup(search_dir, remove_all_data=all_runs)
+        if not cleanup_plan.targets:
+            logger.info("Nothing to clean up.")
+            return
+
+        for line in execute_cleanup(
+            search_dir,
+            cleanup_plan,
+            dry_run=True,
+            remove_all_data=all_runs,
+        ):
+            typer.echo(line)
+
+        if dry_run:
+            return
+
+        if not yes and not typer.confirm("Proceed with cleanup?", default=False):
+            logger.info("Cleanup cancelled.")
+            raise typer.Exit(code=0)
+
+        for line in execute_cleanup(
+            search_dir,
+            cleanup_plan,
+            dry_run=False,
+            remove_all_data=all_runs,
+        ):
+            logger.info(line)
 
 
 if __name__ == "__main__":

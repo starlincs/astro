@@ -99,7 +99,6 @@ class RunManager:
         except Exception:
             shutil.rmtree(run_directory, ignore_errors=True)
             raise
-
         return run_directory, manifest
 
     def load_manifest(self, run_directory: Path) -> RunManifest:

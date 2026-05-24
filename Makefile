@@ -1,4 +1,4 @@
-.PHONY: check lint format typecheck test fix cov cov-html docs docs-serve
+.PHONY: check lint format typecheck test fix cov cov-html docs docs-serve build
 
 check: lint format typecheck test
 
@@ -29,3 +29,8 @@ docs:
 
 docs-serve:
 	sphinx-autobuild docs docs/_build/html --open-browser
+
+build:
+	python -m build
+	pip install --force-reinstall dist/*.whl
+	python -c "import astro; print(astro.__version__)"

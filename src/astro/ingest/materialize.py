@@ -21,6 +21,8 @@ IngestProgressCallback = Callable[[str, int, int | None], None]
 
 @dataclass(frozen=True)
 class MaterializedIngestFile:
+    """One ingested source file written to Parquet."""
+
     record: IngestedFileRecord
 
 

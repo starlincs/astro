@@ -49,33 +49,39 @@ astro describe [-C PIPELINE_DIR]
 
 ## astro list
 
-List registered pipelines and their statistics.
+List stored pipeline runs from the statistics database.
 
 ```bash
 astro list [-C PIPELINE_DIR]
 ```
 
-**Status:** Not yet implemented.
+Displays a table with run ID, pipeline name, status, source directory, and timestamps.
 
 ## astro cleanup
 
-Remove stored pipeline data and statistics.
+Remove completed or failed run directories and their statistics records.
 
 ```bash
-astro cleanup [-C PIPELINE_DIR] [--all]
+astro cleanup [-C PIPELINE_DIR] [--all] [--dry-run] [--yes]
 ```
 
 | Option | Description |
 |--------|-------------|
-| `--all` | Remove all stored pipeline statistics |
+| `--all` | Remove all runs, clear `.astro/stats.db`, and remove `.persistent/` resolver stores |
+| `--dry-run` | Show planned deletions without removing anything |
+| `--yes`, `-y` | Skip the confirmation prompt |
 
-**Status:** Not yet implemented.
+**Behaviour:** By default, removes run directories whose status is `completed` or `failed`, and deletes their rows from the statistics database. Runs that are `ingested` or `quarantined` are preserved. With `--all`, every run directory is removed along with all stored statistics and persistent resolver data. The command always prints a dry-run summary first; omit `--dry-run` and confirm (or pass `--yes`) to execute.
 
 ## Global options
 
 ```bash
-astro --help
+astro [--debug] --help
 ```
+
+| Option | Description |
+|--------|-------------|
+| `--debug` | Enable debug logging and include tracebacks in error output |
 
 ## Logging summary
 

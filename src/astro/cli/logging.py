@@ -17,6 +17,8 @@ _SEPARATOR_WIDTH = 80
 
 
 class LogMode(StrEnum):
+    """Logging destination modes for CLI commands."""
+
     CONSOLE_ONLY = "console_only"
     CONSOLE_AND_FILE = "console_and_file"
     FILE_AND_BUFFER = "file_and_buffer"
@@ -70,9 +72,11 @@ class AstroLoggingContext(AbstractContextManager["AstroLoggingContext"]):
         self.buffer = InMemoryLogBuffer()
         self._previous_level = self.logger.level
         self._previous_propagate = self.logger.propagate
+        self._previous_handlers = list(self.logger.handlers)
         self._handlers: list[logging.Handler] = []
 
     def __enter__(self) -> AstroLoggingContext:
+        self._previous_handlers = list(self.logger.handlers)
         self.logger.handlers.clear()
         self.logger.setLevel(self.level)
         self.logger.propagate = False
@@ -113,6 +117,9 @@ class AstroLoggingContext(AbstractContextManager["AstroLoggingContext"]):
         for handler in self._handlers:
             handler.close()
             self.logger.removeHandler(handler)
+        self.logger.handlers.clear()
+        for handler in self._previous_handlers:
+            self.logger.addHandler(handler)
         self.logger.setLevel(self._previous_level)
         self.logger.propagate = self._previous_propagate
         return None

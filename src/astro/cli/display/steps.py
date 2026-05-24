@@ -10,6 +10,8 @@ from astro.working.manifest import RunManifest, RunStatus, StepRunStatus
 
 
 class StepStatus(StrEnum):
+    """Dashboard display status for one pipeline step."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETE = "complete"
@@ -20,6 +22,8 @@ class StepStatus(StrEnum):
 
 @dataclass
 class PipelineStep:
+    """One step row shown in the run dashboard."""
+
     id: str
     label: str
     status: StepStatus

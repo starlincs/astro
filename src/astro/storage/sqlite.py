@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from astro.stats.models import StatRecord, StatScope
 from astro.working.manifest import IngestedFileRecord, OutputFileRecord
 
 _RUN_SCOPE_SUBJECT = ""
+_SCHEMA_VERSION = 1
+_CONNECT_TIMEOUT_SECONDS = 30.0
+_BUSY_TIMEOUT_MS = 30_000
 
 
 @dataclass(frozen=True)
 class RunRecord:
+    """One persisted pipeline run row."""
+
     run_id: str
     pipeline_name: str
     status: str
@@ -28,57 +33,30 @@ class PipelineStore:
 
     def __init__(self, db_path: Path | None = None) -> None:
         self.db_path = db_path or Path.cwd() / ".astro" / "stats.db"
+        self._initialized = False
 
     def initialize(self) -> None:
+        if self._initialized:
+            return
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
-            connection.executescript(
+            connection.execute(
                 """
-                CREATE TABLE IF NOT EXISTS runs (
-                    run_id TEXT PRIMARY KEY,
-                    pipeline_name TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    source_directory TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    ingested_at TEXT
-                );
-
-                CREATE TABLE IF NOT EXISTS ingest_files (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id TEXT NOT NULL,
-                    file_name TEXT NOT NULL,
-                    source_path TEXT NOT NULL,
-                    parquet_path TEXT NOT NULL,
-                    row_count INTEGER NOT NULL,
-                    column_count INTEGER NOT NULL,
-                    source_size_bytes INTEGER NOT NULL,
-                    FOREIGN KEY (run_id) REFERENCES runs(run_id)
-                );
-
-                CREATE TABLE IF NOT EXISTS output_files (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id TEXT NOT NULL,
-                    file_name TEXT NOT NULL,
-                    source_path TEXT NOT NULL,
-                    parquet_path TEXT NOT NULL,
-                    row_count INTEGER NOT NULL,
-                    column_count INTEGER NOT NULL,
-                    output_size_bytes INTEGER NOT NULL,
-                    FOREIGN KEY (run_id) REFERENCES runs(run_id)
-                );
-
-                CREATE TABLE IF NOT EXISTS statistics (
-                    run_id TEXT NOT NULL,
-                    scope TEXT NOT NULL,
-                    subject TEXT NOT NULL DEFAULT '',
-                    action TEXT NOT NULL,
-                    value REAL NOT NULL,
-                    recorded_at TEXT NOT NULL,
-                    PRIMARY KEY (run_id, scope, subject, action),
-                    FOREIGN KEY (run_id) REFERENCES runs(run_id)
-                );
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER NOT NULL
+                )
                 """
             )
+            row = connection.execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+            if row is None:
+                connection.executescript(self._create_tables_sql())
+                connection.execute(
+                    "INSERT INTO schema_version (version) VALUES (?)",
+                    (_SCHEMA_VERSION,),
+                )
+            elif row[0] != _SCHEMA_VERSION:
+                self._migrate(connection, int(row[0]), _SCHEMA_VERSION)
+        self._initialized = True
 
     def record_run(
         self,
@@ -192,7 +170,7 @@ class PipelineStore:
     ) -> None:
         self.initialize()
         stored_subject = subject if subject is not None else _RUN_SCOPE_SUBJECT
-        recorded_at = datetime.now().isoformat()
+        recorded_at = datetime.now(UTC).isoformat()
         with self._connect() as connection:
             connection.execute(
                 """
@@ -273,6 +251,15 @@ class PipelineStore:
             for row in rows
         ]
 
+    def delete_run(self, run_id: str) -> None:
+        """Remove one run and its related rows from the store."""
+        self.initialize()
+        with self._connect() as connection:
+            connection.execute("DELETE FROM statistics WHERE run_id = ?", (run_id,))
+            connection.execute("DELETE FROM ingest_files WHERE run_id = ?", (run_id,))
+            connection.execute("DELETE FROM output_files WHERE run_id = ?", (run_id,))
+            connection.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
+
     def cleanup(self, pipeline_name: str | None = None) -> None:
         self.initialize()
         with self._connect() as connection:
@@ -293,6 +280,71 @@ class PipelineStore:
                 connection.execute("DELETE FROM runs WHERE pipeline_name = ?", (pipeline_name,))
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.db_path)
+        connection = sqlite3.connect(self.db_path, timeout=_CONNECT_TIMEOUT_SECONDS)
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA synchronous = NORMAL")
         connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute(f"PRAGMA busy_timeout = {_BUSY_TIMEOUT_MS}")
         return connection
+
+    def _create_tables_sql(self) -> str:
+        return """
+            CREATE TABLE IF NOT EXISTS runs (
+                run_id TEXT PRIMARY KEY,
+                pipeline_name TEXT NOT NULL,
+                status TEXT NOT NULL,
+                source_directory TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                ingested_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS ingest_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                parquet_path TEXT NOT NULL,
+                row_count INTEGER NOT NULL,
+                column_count INTEGER NOT NULL,
+                source_size_bytes INTEGER NOT NULL,
+                FOREIGN KEY (run_id) REFERENCES runs(run_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS output_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                parquet_path TEXT NOT NULL,
+                row_count INTEGER NOT NULL,
+                column_count INTEGER NOT NULL,
+                output_size_bytes INTEGER NOT NULL,
+                FOREIGN KEY (run_id) REFERENCES runs(run_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS statistics (
+                run_id TEXT NOT NULL,
+                scope TEXT NOT NULL,
+                subject TEXT NOT NULL DEFAULT '',
+                action TEXT NOT NULL,
+                value REAL NOT NULL,
+                recorded_at TEXT NOT NULL,
+                PRIMARY KEY (run_id, scope, subject, action),
+                FOREIGN KEY (run_id) REFERENCES runs(run_id)
+            );
+            """
+
+    def _migrate(
+        self,
+        connection: sqlite3.Connection,
+        current_version: int,
+        target_version: int,
+    ) -> None:
+        if current_version > target_version:
+            raise RuntimeError(
+                f"Database schema version {current_version} is newer than supported "
+                f"version {target_version}."
+            )
+        if current_version < target_version:
+            connection.executescript(self._create_tables_sql())
+            connection.execute("UPDATE schema_version SET version = ?", (target_version,))

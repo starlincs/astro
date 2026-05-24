@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 
 
 class RunStatus(StrEnum):
+    """Lifecycle status for a pipeline run."""
+
     CREATED = "created"
     INGESTED = "ingested"
     QUARANTINED = "quarantined"
@@ -17,6 +19,8 @@ class RunStatus(StrEnum):
 
 
 class StepRunStatus(StrEnum):
+    """Execution status for one pipeline step."""
+
     PENDING = "pending"
     COMPLETE = "complete"
     QUARANTINED = "quarantined"
@@ -25,6 +29,8 @@ class StepRunStatus(StrEnum):
 
 
 class IngestedFileRecord(BaseModel):
+    """Metadata for one ingested source file in a run manifest."""
+
     name: str
     source_path: str
     parquet_path: str
@@ -34,6 +40,8 @@ class IngestedFileRecord(BaseModel):
 
 
 class OutputFileRecord(BaseModel):
+    """Metadata for one output file recorded in statistics."""
+
     name: str
     source_path: str
     parquet_path: str
@@ -43,12 +51,16 @@ class OutputFileRecord(BaseModel):
 
 
 class StepRunRecord(BaseModel):
+    """Persisted step status for one run."""
+
     step_id: str
     status: StepRunStatus
     detail: str | None = None
 
 
 class RunManifest(BaseModel):
+    """Run manifest stored at ``.working/{run_id}/manifest.json``."""
+
     run_id: str
     pipeline_name: str
     status: RunStatus

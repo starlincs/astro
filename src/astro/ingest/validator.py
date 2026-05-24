@@ -11,6 +11,8 @@ from astro.pipeline.models import IngestFileSpec
 
 @dataclass(frozen=True)
 class MatchedIngestFile:
+    """One source file matched to an ingest specification."""
+
     spec: IngestFileSpec
     source_path: Path
 

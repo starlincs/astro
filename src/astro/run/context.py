@@ -20,6 +20,8 @@ from astro.working.run_manager import RunManager
 
 @dataclass
 class RunProgress:
+    """Mutable run scheduling progress shared by serial and parallel executors."""
+
     steps_completed: int = 0
     stop_reason: str | None = None
     hard_error: Exception | None = None
@@ -28,6 +30,8 @@ class RunProgress:
 
 @dataclass
 class StepExecutionOutcome:
+    """Result of executing one pipeline step."""
+
     step_id: str
     steps_completed_delta: int = 0
     hard_error: Exception | None = None
@@ -36,6 +40,8 @@ class StepExecutionOutcome:
 
 @dataclass
 class RunExecutionContext:
+    """Shared state for one ``astro run`` invocation."""
+
     pipeline_dir: Path
     pipeline: Pipeline
     run_directory: Path

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 
 from astro.pipeline.steps import StepDefinition
@@ -37,6 +38,7 @@ class ParallelStepScheduler:
                         break
                     if self._all_steps_terminal():
                         break
+                    time.sleep(0.01)
                     continue
 
                 done, _ = wait(pending_futures, return_when=FIRST_COMPLETED)

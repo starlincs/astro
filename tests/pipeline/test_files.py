@@ -115,5 +115,24 @@ def test_is_large_file_uses_threshold(tmp_path: Path, ingest_record: IngestedFil
     assert astro_file.is_large_file()
 
 
+def test_save_to_rejects_path_traversal(astro_file: AstroFile) -> None:
+    with pytest.raises(ValueError, match="must not contain"):
+        astro_file.save_to("..", "escape.parquet", pl.DataFrame({"URN": ["1"]}))
+
+
+def test_save_to_rejects_absolute_filename(astro_file: AstroFile) -> None:
+    with pytest.raises(ValueError, match="must be relative"):
+        astro_file.save_to("processed", "/escape.parquet", pl.DataFrame({"URN": ["1"]}))
+
+
+def test_set_active_path_updates_active_file(
+    astro_file: AstroFile,
+    tmp_path: Path,
+) -> None:
+    output_path = astro_file.save_to("processed", "copy.parquet", astro_file.load())
+    astro_file.set_active_path(output_path)
+    assert astro_file.active_path == output_path
+
+
 def test_spec_exposes_custom_configuration(astro_file: AstroFile) -> None:
     assert astro_file.spec.marker == "configured"

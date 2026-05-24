@@ -29,6 +29,8 @@ logger = logging.getLogger("astro.run")
 
 @dataclass(frozen=True)
 class RunResult:
+    """Outcome of a completed ``astro run`` invocation."""
+
     run_id: str
     run_directory: Path
     steps_completed: int
@@ -214,9 +216,9 @@ class RunService:
         ingest_names = sorted({file_spec.__class__.ingest_name for file_spec in step.file_specs})
         file_locks = [ctx.file_locks[ingest_name] for ingest_name in ingest_names]
 
+        step_started_at = time.monotonic()
         try:
             logger.info("Running step %s", step.label)
-            step_started_at = time.monotonic()
             with ExitStack() as lock_stack:
                 for file_lock in file_locks:
                     lock_stack.enter_context(file_lock)
@@ -230,7 +232,7 @@ class RunService:
                 "duration_ms",
                 (time.monotonic() - step_started_at) * 1000,
             )
-            logger.error("Run failed during step %s: %s", step.label, error)
+            logger.error("Run failed during step %s: %s", step.label, error, exc_info=True)
             with ctx.state_lock:
                 ctx.manifest.upsert_step_state(
                     step.step_id,

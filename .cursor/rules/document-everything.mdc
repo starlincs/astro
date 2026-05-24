@@ -1,0 +1,58 @@
+---
+description: Keep documentation in sync whenever code or behaviour changes
+alwaysApply: true
+---
+
+# Document everything
+
+When you change behaviour in `src/astro/`, update documentation in the same task before finishing. Do not treat docs as optional follow-up work.
+
+## When to update docs
+
+Update documentation for any change that affects:
+
+- CLI commands, flags, or output
+- Pipeline contract, step/filter APIs, or file I/O
+- Storage layout, run lifecycle, or statistics
+- Security or trust boundaries
+- Public Python exports (`astro.__all__`)
+- Installation, packaging, or release process
+
+## Where to update
+
+| Change type | Update |
+|-------------|--------|
+| User-facing behaviour | Relevant page in `docs/user-guide/` or `docs/getting-started/` |
+| Behavioural contract | `SPEC.md` (clarifications only unless approved) |
+| CLI surface | `docs/user-guide/cli.md` and `README.md` usage section |
+| Public API | Docstrings in `src/astro/` and `docs/api/index.md` if exports change |
+| Examples | `examples/` and `examples/README.md` |
+| User-visible release | `CHANGELOG.md` |
+| Contributor workflow | `docs/contributing/` and `AGENTS.md` when process changes |
+
+## Workflow
+
+1. Read the relevant `SPEC.md` section and matching user guide page before coding.
+2. Implement the code change (with tests first per test-first rule).
+3. Update every doc location from the table above that the change touches.
+4. Grep `docs/`, `README.md`, `SPEC.md`, and `CHANGELOG.md` for stale references (old flags, removed APIs, "not implemented", wrong version).
+5. If CLI options changed, verify `docs/user-guide/cli.md` matches `src/astro/cli/main.py`.
+6. Run `make docs` when Sphinx pages or cross-references changed.
+
+## Checklist before completing
+
+- [ ] User guide reflects the new or changed behaviour
+- [ ] `SPEC.md` matches implementation (or only clarifies existing intent)
+- [ ] `CHANGELOG.md` updated for user-visible changes
+- [ ] `README.md` updated when install, usage, or security model changes
+- [ ] Public API docstrings present for new or changed exports
+- [ ] No stale "stub", "not implemented", or outdated version references remain
+
+## Example
+
+Adding `astro cleanup --dry-run`:
+
+1. Add test in `tests/cli/test_commands.py`
+2. Implement in `src/astro/cli/main.py`
+3. Update `docs/user-guide/cli.md`, `SPEC.md` CLI table, and `CHANGELOG.md`
+4. Update `README.md` if the example command list should show the new flag

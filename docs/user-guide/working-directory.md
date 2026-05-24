@@ -55,6 +55,10 @@ Run IDs are 5-character lowercase alphanumeric strings assigned at ingest time.
 
 See {doc}`statistics` for the statistics API and built-in metrics.
 
+## Cleanup
+
+Use `astro cleanup` to remove completed or failed run directories under `.working/` and delete their statistics records. Pass `--all` to also clear `.astro/stats.db` and `.persistent/`. See {doc}`cli` for `--dry-run` and confirmation options.
+
 ## Next steps
 
 - {doc}`ingest` — what happens during ingest

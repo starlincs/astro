@@ -23,6 +23,7 @@ astro --help
 
 ```bash
 make check                              # lint + format + typecheck + tests
+make cov                                # include large-file integration tests
 make fix                                # auto-fix lint and format issues
 pytest tests/path/to/test_module.py -q  # run a single test module
 pre-commit run -a                       # run all pre-commit hooks

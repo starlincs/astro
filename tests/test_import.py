@@ -4,7 +4,6 @@ import astro
 from astro import (
     CanonicalIdResolver,
     FilterFn,
-    IngestedSource,
     Pipeline,
     StatisticsRecorder,
     StatScope,
@@ -12,12 +11,11 @@ from astro import (
 
 
 def test_package_version() -> None:
-    assert astro.__version__ == "0.1.0"
+    assert astro.__version__ == "1.0.0"
 
 
 def test_public_exports() -> None:
     assert CanonicalIdResolver is not None
-    assert IngestedSource is not None
     assert Pipeline is not None
     assert FilterFn is not None
     assert StatScope is not None

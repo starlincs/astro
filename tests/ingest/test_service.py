@@ -8,6 +8,7 @@ import pandera.polars as pa
 import pytest
 
 from astro.ingest.service import IngestService
+from astro.ingest.validator import IngestValidationError
 from astro.pipeline.base import Pipeline
 from astro.pipeline.files import AstroFile, AstroFileSpec
 from astro.pipeline.models import ExecutionMode, IngestFileSpec
@@ -128,3 +129,31 @@ def test_parallel_pipeline_allows_multiple_runs(
     second = service.ingest(source_directory)
 
     assert first.run_id != second.run_id
+
+
+def test_ingest_service_marks_failed_on_validation_error(
+    pipeline_directory: Path,
+    tmp_path: Path,
+) -> None:
+    bad_source = tmp_path / "source"
+    bad_source.mkdir()
+    (bad_source / "edubase20260522.csv").write_text(
+        "URN,EstablishmentName\n100001,School\n",
+        encoding="utf-8",
+    )
+    (bad_source / "unexpected.csv").write_text("x\n1\n", encoding="utf-8")
+    pipeline = SerialTestPipeline()
+    service = IngestService(pipeline_directory, pipeline)
+
+    with pytest.raises(IngestValidationError, match="Unexpected files"):
+        service.ingest(bad_source)
+
+    working_root = pipeline_directory / ".working"
+    run_directories = [path for path in working_root.iterdir() if path.is_dir()]
+    assert len(run_directories) == 1
+    manifest = RunManager(pipeline_directory).load_manifest(run_directories[0])
+    assert manifest.status == RunStatus.FAILED
+    store = PipelineStore(pipeline_directory / ".astro" / "stats.db")
+    assert (
+        store.list_stats(manifest.run_id, scope=StatScope.RUN, action="ingest_failed")[0].value == 1
+    )

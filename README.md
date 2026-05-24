@@ -10,7 +10,15 @@ Build locally with `pip install -e ".[docs]"` and `make docs`.
 
 ## Install
 
-From source (until published on PyPI):
+From PyPI:
+
+```bash
+pip install astro-pipeline
+```
+
+The package installs the `astro` CLI and Python module. PyPI name is `astro-pipeline` because `astro` is already taken.
+
+From source:
 
 ```bash
 git clone https://github.com/starlincs/astro.git

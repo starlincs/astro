@@ -2,12 +2,20 @@
 
 Astro requires **Python 3.11 or later**.
 
+## Install from PyPI
+
+```bash
+pip install astro-pipeline
+```
+
+The distribution name is `astro-pipeline` (the name `astro` is already taken on PyPI). After install, use the `astro` CLI and `import astro` as usual.
+
 ## Install from source
 
 Clone the Astro repository and install in editable mode with development dependencies:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/starlincs/astro.git
 cd astro
 pip install -e ".[dev]"
 ```
@@ -36,6 +44,12 @@ make docs-serve
 ## Use Astro in a pipeline repository
 
 Pipeline repositories depend on Astro as a library. Install Astro into the same Python environment where you run your pipeline:
+
+```bash
+pip install astro-pipeline
+```
+
+Or from a local checkout:
 
 ```bash
 pip install -e /path/to/astro

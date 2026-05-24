@@ -126,7 +126,7 @@ def _apply_filter_batched(
         removed_writer.close()
         _replace_file(kept_temp_path, Path(file.ingest_record.parquet_path))
         _replace_file(removed_temp_path, filtered_path)
-        file._active_path = Path(file.ingest_record.parquet_path)
+        file.set_active_path(Path(file.ingest_record.parquet_path))
     except Exception:
         kept_writer.abort()
         removed_writer.abort()
