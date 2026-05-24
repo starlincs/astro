@@ -10,6 +10,8 @@ from astro.pipeline.steps import StepContext
 
 
 class EstablishmentsFile(AstroFileSpec):
+    """Ingest file spec for establishment CSV sources."""
+
     ingest_name = "establishments"
 
 
@@ -23,6 +25,8 @@ def step_copy_establishments(_ctx: StepContext, files: list[AstroFile]) -> None:
 
 
 class ExamplePipeline(Pipeline):
+    """Sample pipeline with a filter step and a copy step."""
+
     name = "example"
     execution_mode = ExecutionMode.SERIAL
     ingest_files = [
