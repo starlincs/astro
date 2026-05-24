@@ -47,9 +47,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=astro --cov-report=term-missing --cov-fail-under=80"
+addopts = "--cov=astro --cov-report=term-missing --cov-fail-under=80 -m \"not large\""
 markers = [
     "integration: tests needing external fixtures or full pipeline dirs",
+    "large: optional large-file streaming integration tests",
 ]
 filterwarnings = ["error"]
 

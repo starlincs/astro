@@ -70,5 +70,50 @@ def test_save_to_rejects_empty_subfolder(astro_file: AstroFile) -> None:
         astro_file.save_to("", "out.parquet", pl.DataFrame({"URN": ["1"]}))
 
 
+def test_scan_sink_and_row_count_round_trip(astro_file: AstroFile) -> None:
+    lazy_frame = astro_file.scan().with_columns(pl.lit("processed").alias("stage"))
+    output_path = astro_file.save_to_lazy("processed", "establishments.parquet", lazy_frame)
+
+    assert output_path == astro_file.active_path
+    assert astro_file.row_count() == 1
+    loaded = astro_file.load()
+    assert loaded["stage"][0] == "processed"
+
+
+def test_iter_batches_reads_parquet_in_chunks(
+    tmp_path: Path,
+    ingest_record: IngestedFileRecord,
+) -> None:
+    parquet_path = Path(ingest_record.parquet_path)
+    dataframe = pl.DataFrame(
+        {
+            "URN": [str(index) for index in range(5)],
+            "EstablishmentName": ["School"] * 5,
+        }
+    )
+    dataframe.write_parquet(parquet_path)
+    astro_file = AstroFile.hydrate(
+        spec=EstablishmentsFile(),
+        ingest_record=ingest_record,
+        run_directory=tmp_path,
+        run_batch_size=2,
+    )
+
+    batches = list(astro_file.iter_batches())
+
+    assert [batch.height for batch in batches] == [2, 2, 1]
+
+
+def test_is_large_file_uses_threshold(tmp_path: Path, ingest_record: IngestedFileRecord) -> None:
+    astro_file = AstroFile.hydrate(
+        spec=EstablishmentsFile(),
+        ingest_record=ingest_record,
+        run_directory=tmp_path,
+        large_file_threshold_bytes=1,
+    )
+
+    assert astro_file.is_large_file()
+
+
 def test_spec_exposes_custom_configuration(astro_file: AstroFile) -> None:
     assert astro_file.spec.marker == "configured"

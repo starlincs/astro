@@ -21,7 +21,7 @@ astro list
 astro cleanup
 ```
 
-`astro ingest` prints logs to the console and writes them to `.working/{run_id}/astro.log`. `astro run` executes registered pipeline steps; it uses a Rich dashboard by default (`--mode cli` for plain log output). Set `step_execution_mode = StepExecutionMode.PARALLEL` on a pipeline to run independent steps concurrently (subject to `depends_on` and shared-file locking). Steps use `AstroFileSpec` / `AstroFile` containers with explicit output paths. Use `add_filter` for declarative row filtering; re-run `astro run` against a `quarantined` run to merge quarantined rows back and retry only the affected steps. Record custom metrics from steps via `ctx.stats`.
+`astro ingest` prints logs to the console and writes them to `.working/{run_id}/astro.log`. `astro run` executes registered pipeline steps; it uses a Rich dashboard by default (`--mode cli` for plain log output). Set `step_execution_mode = StepExecutionMode.PARALLEL` on a pipeline to run independent steps concurrently (subject to `depends_on` and shared-file locking). Large files (≥100MB by default) use batched ingest, filter, and quarantine I/O; steps can also use `file.scan()` and `file.sink()` for lazy transforms. Steps use `AstroFileSpec` / `AstroFile` containers with explicit output paths. Use `add_filter` for declarative row filtering; re-run `astro run` against a `quarantined` run to merge quarantined rows back and retry only the affected steps. Record custom metrics from steps via `ctx.stats`.
 
 Pipeline repos define a `pipeline.py` that imports Astro and exports a `pipeline` instance. Run Astro from that directory (or pass `-C`).
 

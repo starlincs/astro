@@ -9,6 +9,7 @@ from typing import Annotated
 
 import typer
 from rich.live import Live
+from rich.progress import BarColumn, Progress, TaskID, TextColumn, TimeElapsedColumn
 
 from astro.cli.display.dashboard import RunDashboard
 from astro.cli.display.flow import render_flow_diagram
@@ -157,6 +158,7 @@ def ingest(
         assert pipeline is not None
 
         service = IngestService(search_dir, pipeline)
+        progress_tasks: dict[str, TaskID] = {}
 
         def on_run_created(run_directory: Path, run_id: str) -> None:
             logging_context.attach_run_log(
@@ -167,7 +169,40 @@ def ingest(
             )
 
         try:
-            result = service.ingest(path, on_run_created=on_run_created)
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("{task.percentage:>3.0f}%"),
+                TimeElapsedColumn(),
+                transient=True,
+            ) as progress:
+
+                def on_ingest_progress(
+                    file_name: str,
+                    rows_done: int,
+                    total_rows: int | None,
+                ) -> None:
+                    if file_name not in progress_tasks:
+                        progress_tasks[file_name] = progress.add_task(
+                            f"Materializing {file_name}",
+                            total=total_rows or 100,
+                        )
+                    task_id = progress_tasks[file_name]
+                    if total_rows is not None and total_rows > 0:
+                        progress.update(
+                            task_id,
+                            completed=min(rows_done, total_rows),
+                            total=total_rows,
+                            description=f"{file_name}: {rows_done:,} / {total_rows:,} rows",
+                        )
+                        return
+                    progress.update(task_id, description=f"{file_name}: {rows_done:,} rows")
+
+                result = service.ingest(
+                    path,
+                    on_run_created=on_run_created,
+                    on_ingest_progress=on_ingest_progress,
+                )
         except SerialIngestConflictError as error:
             _exit_with_logged_error(str(error))
         except IngestValidationError as error:

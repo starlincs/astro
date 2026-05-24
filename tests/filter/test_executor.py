@@ -120,3 +120,60 @@ def test_apply_filter_step_rejects_rows_not_in_input(tmp_path: Path) -> None:
 
     with pytest.raises(FilterValidationError, match="not present"):
         apply_filter_step(context, [file], invalid_filter)
+
+
+def test_apply_filter_step_uses_batched_path_for_large_files(tmp_path: Path) -> None:
+    store = PipelineStore(tmp_path / ".astro" / "stats.db")
+    store.record_run(
+        run_id="abcde",
+        pipeline_name="example",
+        status=RunStatus.INGESTED.value,
+        source_directory="/tmp/source",
+        created_at=datetime(2026, 5, 22, tzinfo=UTC),
+    )
+    context = _build_context(tmp_path, store)
+    run_directory = tmp_path / "run"
+    ingested_directory = run_directory / "ingested"
+    ingested_directory.mkdir(parents=True)
+    parquet_path = ingested_directory / "establishments.parquet"
+    establishment_names = [
+        "Open School",
+        "Closed School",
+        "Open School",
+        "Closed School",
+        "Open School",
+        "Open School",
+    ]
+    pl.DataFrame(
+        {
+            "URN": [str(index) for index in range(6)],
+            "EstablishmentName": establishment_names,
+        }
+    ).write_parquet(parquet_path)
+    file = AstroFile.hydrate(
+        spec=EstablishmentsFile(),
+        ingest_record=IngestedFileRecord(
+            name="establishments",
+            source_path="/tmp/source.csv",
+            parquet_path=str(parquet_path),
+            row_count=6,
+            column_count=2,
+            source_size_bytes=10,
+        ),
+        run_directory=run_directory,
+        large_file_threshold_bytes=1,
+        run_batch_size=2,
+    )
+
+    def remove_closed(dataframe: pl.DataFrame) -> pl.DataFrame:
+        return dataframe.filter(pl.col("EstablishmentName").str.contains("Closed"))
+
+    apply_filter_step(context, [file], remove_closed)
+
+    kept = file.load()
+    assert kept.height == 4
+    filtered_store = FilterStore(tmp_path / "run")
+    filtered = filtered_store.read_filtered(
+        filtered_store.filtered_path("remove-closed", "establishments")
+    )
+    assert filtered.height == 2

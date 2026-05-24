@@ -51,6 +51,9 @@ Pipelines declare ingest configuration and register ordered run steps:
 - **`execution_mode`** — `serial` or `parallel` ingest concurrency rules
 - **`step_execution_mode`** — `serial` (default) or `parallel` run-step scheduling within a single run
 - **`max_parallel_workers`** — optional cap on concurrent run steps when `step_execution_mode=parallel` (defaults to `min(32, cpu_count + 4)`)
+- **`large_file_threshold_bytes`** — source/Parquet size above which Astro uses batched ingest and batched filter/quarantine paths (default 100MB)
+- **`ingest_batch_size`** — CSV rows validated and written per batch during large-file ingest (default 100,000)
+- **`run_batch_size`** — Parquet rows processed per batch during large-file filter steps and `AstroFile.iter_batches()` (default 100,000)
 - **`configure_steps()`** — register run steps via `add_step(label, fn, files, depends_on=[...])` or filter steps via `add_filter(label, fn, files, depends_on=[...])`
 - **`AstroFileSpec`** — per-file configuration container referenced by steps
 - **`AstroFile`** — runtime wrapper hydrated during `astro run` with explicit I/O methods
@@ -61,9 +64,15 @@ Each source file may have a different schema. Run steps replace the previous `tr
 
 Steps must write outputs explicitly:
 
+- `file.load()` — eager read from the file's current active path (small files)
+- `file.scan()` — lazy `scan_parquet` over the active path
+- `file.sink(lf)` / `file.save_in_place_lazy(lf)` / `file.save_to_lazy(...)` — streaming Parquet writes without full materialization
+- `file.row_count()` — metadata-only row count
+- `file.iter_batches()` — iterate Parquet row batches for large-file step logic
 - `file.save_in_place(df)` — overwrite the ingested Parquet snapshot
 - `file.save_to(subfolder, filename, df)` — write under `.working/{run_id}/{subfolder}/`
-- `file.load()` — read from the file's current active path
+
+For large files, prefer `scan()` + `sink()` in custom steps. Filter steps accept either a `FilterFn` (batched automatically above the threshold) or a Polars expression predicate via `add_filter(label, pl.col(...) == ..., files=[...])`.
 
 Validation-only steps may call `load()` and raise without saving.
 
@@ -120,9 +129,11 @@ class ExamplePipeline(Pipeline):
 
 1. Validate `SOURCE_DIR` contains exactly the expected files (no extras, no subdirectories)
 2. Validate each CSV against its Pandera schema
-3. Write Parquet files to `.working/{run_id}/ingested/`
+3. Write Parquet files to `.working/{run_id}/ingested/` (batched validation + append for files ≥ `large_file_threshold_bytes`)
 4. Record run and file statistics in `.astro/stats.db`
 5. Update `manifest.json` with status `ingested`
+
+Large-file ingest reads CSVs in batches, validates each batch with Pandera, and appends to a single Parquet file via PyArrow. Small files use the eager path. CSV dtypes are derived from the Pandera schema to avoid loading all columns as strings.
 
 ### Execution modes
 
@@ -177,7 +188,7 @@ Steps may quarantine individual rows that fail business rules without aborting t
   ingested/
   processed/ …
   snapshots/{step_id}/{ingest_name}.parquet   # input active_path captured at step start
-  quarantine/{step_id}/{ingest_name}.parquet  # rows quarantined during that step
+  quarantine/{step_id}/{ingest_name}.part-00001.parquet  # rows quarantined during that step
   manifest.json                               # extended with step_states
 ```
 
@@ -198,7 +209,7 @@ def step_validate(_ctx: StepContext, files: list[AstroFile]) -> None:
     file.save_in_place(good)
 ```
 
-- `ctx.quarantine.quarantine_rows(file, rows, reason=...)` — append rows to the step quarantine file
+- `ctx.quarantine.quarantine_rows(file, rows, reason=...)` — append rows to a new step quarantine part file (no read-merge-rewrite)
 - `ctx.quarantine.quarantine_row(file, row, reason=...)` — convenience for a single row
 - `reason` must be non-empty; `rows` must not be empty
 - Step authors must exclude quarantined rows from saved output (the framework only collects and merges back on retry)
@@ -429,4 +440,4 @@ Before merging or completing work:
 
 ## Current status
 
-`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization, SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps serially by default or in parallel when configured via `step_execution_mode`, with dashboard or CLI display, row quarantine, row filtering, retry for quarantined runs, and automatic statistics recording. `astro describe` prints a terminal flow diagram of ingest and run steps. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.
+`astro ingest` is implemented with run creation, Pandera validation, Parquet materialization (including batched large-file ingest), SQLite statistics, serial/parallel gating, and run-scoped logging. `astro run` executes registered pipeline steps serially by default or in parallel when configured via `step_execution_mode`, with batched filter/quarantine paths for large files, dashboard or CLI display, row quarantine, row filtering, retry for quarantined runs, and automatic statistics recording. `astro describe` prints a terminal flow diagram of ingest and run steps. The canonical ID resolver library is implemented as a separate importable module. `astro list` and `astro cleanup` remain stubs.

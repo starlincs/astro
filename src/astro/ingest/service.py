@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from astro.ingest.materialize import materialize_ingest_file
+from astro.ingest.materialize import IngestProgressCallback, materialize_ingest_file
 from astro.ingest.validator import IngestValidationError, match_ingest_files
 from astro.pipeline.base import Pipeline
 from astro.stats.recorder import StatisticsRecorder
@@ -40,6 +40,7 @@ class IngestService:
         source_directory: Path,
         *,
         on_run_created: Callable[[Path, str], None] | None = None,
+        on_ingest_progress: IngestProgressCallback | None = None,
     ) -> IngestResult:
         source_directory = source_directory.resolve()
         self.run_manager.assert_serial_ingest_allowed(self.pipeline.execution_mode)
@@ -60,10 +61,43 @@ class IngestService:
             ingest_directory = self.run_manager.ingest_directory_for(run_directory)
             materialized_files = []
             for matched_file in matched_files:
+                source_size_bytes = matched_file.source_path.stat().st_size
                 logger.info("Materializing %s", matched_file.spec.name)
+                progress_state = {"last_percent": -1}
+
+                def progress_callback(
+                    file_name: str,
+                    rows_done: int,
+                    total_rows: int | None,
+                    *,
+                    _progress_state: dict[str, int] = progress_state,
+                ) -> None:
+                    if on_ingest_progress is not None:
+                        on_ingest_progress(file_name, rows_done, total_rows)
+                        return
+                    if total_rows is None or total_rows <= 0:
+                        if rows_done % max(self.pipeline.ingest_batch_size, 1) == 0:
+                            logger.info("Materializing %s: %s rows", file_name, f"{rows_done:,}")
+                        return
+                    percent = int(rows_done / total_rows * 100)
+                    if percent >= _progress_state["last_percent"] + 5 or rows_done >= total_rows:
+                        _progress_state["last_percent"] = percent
+                        logger.info(
+                            "Materializing %s: %s / %s rows (%s%%)",
+                            file_name,
+                            f"{rows_done:,}",
+                            f"{total_rows:,}",
+                            percent,
+                        )
+
                 materialized = materialize_ingest_file(
                     matched_file,
                     ingest_directory=ingest_directory,
+                    large_file_threshold_bytes=self.pipeline.large_file_threshold_bytes,
+                    ingest_batch_size=self.pipeline.ingest_batch_size,
+                    progress_callback=progress_callback
+                    if source_size_bytes >= self.pipeline.large_file_threshold_bytes
+                    else None,
                 )
                 materialized_files.append(materialized)
                 logger.info(

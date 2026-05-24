@@ -177,7 +177,13 @@ class RunService:
     def execute_step(self, step: StepDefinition, ctx: RunExecutionContext) -> StepExecutionOutcome:
         current_status = ctx.manifest.step_status_map().get(step.step_id, StepRunStatus.PENDING)
         step_files = [
-            self._resolve_step_file(file_spec, ctx.file_pool, ctx.manifest, ctx.run_directory)
+            self._resolve_step_file(
+                file_spec,
+                ctx.file_pool,
+                ctx.manifest,
+                ctx.run_directory,
+                ctx.pipeline,
+            )
             for file_spec in step.file_specs
         ]
 
@@ -244,12 +250,12 @@ class RunService:
 
         if quarantine.has_quarantined_rows:
             quarantine_row_count = sum(
-                ctx.quarantine_store.read_rows(
+                ctx.quarantine_store.row_count(
                     ctx.quarantine_store.quarantine_path(
                         step.step_id,
                         file.spec.__class__.ingest_name,
                     )
-                ).height
+                )
                 for file in step_files
             )
             step_stats.record_step("rows_quarantined", quarantine_row_count)
@@ -406,6 +412,8 @@ class RunService:
                     spec=file_spec,
                     ingest_record=record,
                     run_directory=run_directory,
+                    large_file_threshold_bytes=pipeline.large_file_threshold_bytes,
+                    run_batch_size=pipeline.run_batch_size,
                 )
         return file_pool
 
@@ -415,6 +423,7 @@ class RunService:
         file_pool: dict[str, AstroFile],
         manifest: RunManifest,
         run_directory: Path,
+        pipeline: Pipeline,
     ) -> AstroFile:
         ingest_name = file_spec.__class__.ingest_name
         existing = file_pool.get(ingest_name)
@@ -427,6 +436,8 @@ class RunService:
             spec=file_spec,
             ingest_record=record,
             run_directory=run_directory,
+            large_file_threshold_bytes=pipeline.large_file_threshold_bytes,
+            run_batch_size=pipeline.run_batch_size,
         )
         file_pool[ingest_name] = hydrated
         return hydrated

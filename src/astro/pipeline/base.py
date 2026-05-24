@@ -11,6 +11,11 @@ from typing import ClassVar
 import polars as pl
 
 from astro.filter.types import FilterFn
+from astro.io.constants import (
+    DEFAULT_INGEST_BATCH_SIZE,
+    DEFAULT_LARGE_FILE_THRESHOLD_BYTES,
+    DEFAULT_RUN_BATCH_SIZE,
+)
 from astro.pipeline.files import AstroFile, AstroFileSpec
 from astro.pipeline.models import ExecutionMode, IngestFileSpec, StepExecutionMode
 from astro.pipeline.steps import (
@@ -37,6 +42,9 @@ class Pipeline(ABC):
     execution_mode: ExecutionMode = ExecutionMode.SERIAL
     step_execution_mode: StepExecutionMode = StepExecutionMode.SERIAL
     max_parallel_workers: int | None = None
+    large_file_threshold_bytes: int = DEFAULT_LARGE_FILE_THRESHOLD_BYTES
+    ingest_batch_size: int = DEFAULT_INGEST_BATCH_SIZE
+    run_batch_size: int = DEFAULT_RUN_BATCH_SIZE
     ingest_files: ClassVar[list[IngestFileSpec]]
 
     def __init_subclass__(cls, **kwargs: object) -> None:
@@ -107,16 +115,24 @@ class Pipeline(ABC):
     def add_filter(
         self,
         label: str,
-        fn: FilterFn,
+        fn: FilterFn | pl.Expr,
         files: Sequence[AstroFileSpec],
         *,
         step_id: str | None = None,
         depends_on: Sequence[str] | None = None,
     ) -> None:
-        from astro.filter.executor import apply_filter_step
+        from astro.filter.executor import apply_filter_step, apply_predicate_filter_step
 
-        def filter_step(context: StepContext, step_files: list[AstroFile]) -> None:
-            apply_filter_step(context, step_files, fn)
+        if isinstance(fn, pl.Expr):
+            predicate = fn
+
+            def filter_step(context: StepContext, step_files: list[AstroFile]) -> None:
+                apply_predicate_filter_step(context, step_files, predicate)
+
+        else:
+
+            def filter_step(context: StepContext, step_files: list[AstroFile]) -> None:
+                apply_filter_step(context, step_files, fn)
 
         self.add_step(
             label,
