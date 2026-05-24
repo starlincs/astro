@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from astro.stats.models import StatRecord, StatScope
-from astro.working.manifest import IngestedFileRecord
+from astro.working.manifest import IngestedFileRecord, OutputFileRecord
 
 _RUN_SCOPE_SUBJECT = ""
 
@@ -52,6 +52,18 @@ class PipelineStore:
                     row_count INTEGER NOT NULL,
                     column_count INTEGER NOT NULL,
                     source_size_bytes INTEGER NOT NULL,
+                    FOREIGN KEY (run_id) REFERENCES runs(run_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS output_files (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    run_id TEXT NOT NULL,
+                    file_name TEXT NOT NULL,
+                    source_path TEXT NOT NULL,
+                    parquet_path TEXT NOT NULL,
+                    row_count INTEGER NOT NULL,
+                    column_count INTEGER NOT NULL,
+                    output_size_bytes INTEGER NOT NULL,
                     FOREIGN KEY (run_id) REFERENCES runs(run_id)
                 );
 
@@ -131,6 +143,40 @@ class PipelineStore:
                         file_record.row_count,
                         file_record.column_count,
                         file_record.source_size_bytes,
+                    )
+                    for file_record in files
+                ],
+            )
+
+    def record_output_files(
+        self,
+        run_id: str,
+        files: list[OutputFileRecord],
+    ) -> None:
+        self.initialize()
+        with self._connect() as connection:
+            connection.execute("DELETE FROM output_files WHERE run_id = ?", (run_id,))
+            connection.executemany(
+                """
+                INSERT INTO output_files (
+                    run_id,
+                    file_name,
+                    source_path,
+                    parquet_path,
+                    row_count,
+                    column_count,
+                    output_size_bytes
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        run_id,
+                        file_record.name,
+                        file_record.source_path,
+                        file_record.parquet_path,
+                        file_record.row_count,
+                        file_record.column_count,
+                        file_record.output_size_bytes,
                     )
                     for file_record in files
                 ],
@@ -233,6 +279,7 @@ class PipelineStore:
             if pipeline_name is None:
                 connection.execute("DELETE FROM statistics")
                 connection.execute("DELETE FROM ingest_files")
+                connection.execute("DELETE FROM output_files")
                 connection.execute("DELETE FROM runs")
             else:
                 run_ids = connection.execute(
@@ -242,6 +289,7 @@ class PipelineStore:
                 for (run_id,) in run_ids:
                     connection.execute("DELETE FROM statistics WHERE run_id = ?", (run_id,))
                     connection.execute("DELETE FROM ingest_files WHERE run_id = ?", (run_id,))
+                    connection.execute("DELETE FROM output_files WHERE run_id = ?", (run_id,))
                 connection.execute("DELETE FROM runs WHERE pipeline_name = ?", (pipeline_name,))
 
     def _connect(self) -> sqlite3.Connection:

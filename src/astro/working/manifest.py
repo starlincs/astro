@@ -33,6 +33,15 @@ class IngestedFileRecord(BaseModel):
     source_size_bytes: int
 
 
+class OutputFileRecord(BaseModel):
+    name: str
+    source_path: str
+    parquet_path: str
+    row_count: int
+    column_count: int
+    output_size_bytes: int
+
+
 class StepRunRecord(BaseModel):
     step_id: str
     status: StepRunStatus
