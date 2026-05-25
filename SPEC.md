@@ -1,6 +1,6 @@
 # Astro specification
 
-> **User documentation:** Installation guides, tutorials, and API reference are in [`docs/`](docs/) and published at [https://astro.readthedocs.io](https://astro.readthedocs.io). This document is the behavioural specification for implementers and agents.
+> **User documentation:** Installation guides, tutorials, and API reference are in [`docs/`](docs/) and published at [https://astro-pipeline.readthedocs.io](https://astro-pipeline.readthedocs.io). This document is the behavioural specification for implementers and agents.
 
 ## What this is
 
@@ -11,7 +11,7 @@ The core product intent is:
 - **CLI control** — run and manage pipelines from the command line
 - **Library** — define pipelines in external repositories by importing Astro
 - **External pipelines** — each pipeline lives in its own repo with a `pipeline.py` file
-- **Folder ingestion** — ingest a single CSV file or a directory of files with heterogeneous schemas
+- **Folder ingestion** — ingest a source directory containing one or more CSV files with heterogeneous schemas
 - **Persistent statistics** — store pipeline run statistics locally in SQLite
 
 ## Tech stack
@@ -80,7 +80,7 @@ Validation-only steps may call `load()` and raise without saving.
 
 ## Ingest step
 
-`astro ingest SOURCE_DIR` creates a new pipeline run under `.working/{run_id}/`:
+`astro ingest SOURCE_DIR` creates a new pipeline run under `.working/{run_id}/`. `SOURCE_DIR` must be a directory containing one or more CSV source files:
 
 ```text
 .working/
@@ -129,7 +129,7 @@ class ExamplePipeline(Pipeline):
 
 ### Ingest behaviour
 
-1. Validate `SOURCE_DIR` contains exactly the expected files (no extras, no subdirectories)
+1. Validate `SOURCE_DIR` is a directory containing exactly the expected CSV files (no extras, no subdirectories)
 2. Validate each CSV against its Pandera schema
 3. Write Parquet files to `.working/{run_id}/ingested/` (batched validation + append for files ≥ `large_file_threshold_bytes`)
 4. Record run and file statistics in `.astro/stats.db`

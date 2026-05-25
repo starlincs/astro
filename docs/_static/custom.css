@@ -1,5 +1,69 @@
 /* Brand accent hover states and link styling. */
 
+:root {
+  --astro-sidebar-width: 15em;
+}
+
+/* Furo centers a fixed-width content column; pin the nav to the left edge instead. */
+.page {
+  justify-content: flex-start;
+}
+
+.sidebar-drawer {
+  flex: 0 0 var(--astro-sidebar-width);
+  justify-content: flex-start;
+  min-width: var(--astro-sidebar-width);
+  width: var(--astro-sidebar-width);
+}
+
+.main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.content {
+  flex: 1 1 auto;
+  margin-left: 0;
+  margin-right: 0;
+  max-width: none;
+  width: auto;
+}
+
+@media (max-width: 82em) {
+  .sidebar-drawer {
+    flex: 0 0 var(--astro-sidebar-width);
+    width: var(--astro-sidebar-width);
+  }
+}
+
+@media (max-width: 67em) {
+  .content {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}
+
+@media (max-width: 63em) {
+  .page {
+    justify-content: flex-start;
+  }
+}
+
+/* Home page toctrees feed the sidebar only; hide empty wrappers in main content. */
+article .toctree-wrapper {
+  display: none;
+}
+
+body[data-theme="light"],
+body:not([data-theme]) {
+  --color-content-background: #ffffff;
+}
+
+body[data-theme="light"] .sidebar-drawer,
+body:not([data-theme]) .sidebar-drawer {
+  background: #f2efe0;
+}
+
 body[data-theme="light"] a,
 body:not([data-theme]) a,
 body[data-theme="dark"] a {

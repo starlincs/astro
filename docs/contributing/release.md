@@ -18,7 +18,7 @@ make build
 Artifacts are written to `dist/`. Verify locally with:
 
 ```bash
-make build
+twine check dist/*
 ```
 
 For manual uploads, run `twine check dist/*` if your Twine version supports Metadata 2.4 (PEP 639). PyPI accepts the wheel regardless.

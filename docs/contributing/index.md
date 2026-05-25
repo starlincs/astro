@@ -6,7 +6,7 @@ Thank you for contributing to Astro. This guide covers development setup, testin
 
 | Audience | Location |
 |----------|----------|
-| End users | `docs/` (built with Sphinx, hosted on [Read the Docs](https://astro.readthedocs.io)) |
+| End users | `docs/` (built with Sphinx, hosted on [Read the Docs](https://astro-pipeline.readthedocs.io)) |
 | Implementers and agents | [`SPEC.md`](https://github.com/starlincs/astro/blob/main/SPEC.md) |
 | Coding agents | [`AGENTS.md`](https://github.com/starlincs/astro/blob/main/AGENTS.md) |
 

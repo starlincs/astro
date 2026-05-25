@@ -7,7 +7,7 @@ Astro helps you build reliable CSV import pipelines in Python. You define a pipe
 - **CLI control** — run and manage pipelines from the command line
 - **Library** — define pipelines by importing Astro in your own repository
 - **External pipelines** — each pipeline lives in its own repo with a `pipeline.py` file
-- **Folder ingestion** — ingest a directory of CSV files with heterogeneous schemas
+- **Folder ingestion** — ingest a source directory containing one or more CSV files with heterogeneous schemas
 - **Persistent statistics** — store pipeline run statistics locally in SQLite
 
 ## Typical workflow
@@ -36,4 +36,4 @@ Astro helps you build reliable CSV import pipelines in Python. You define a pipe
 
 ## Security model
 
-Astro discovers and executes `pipeline.py` from the directory you pass to `-C` / `--pipeline-dir` (default: current directory). That module runs as your user and can read and write files under the pipeline working tree. **Only run Astro against pipeline repositories you trust.**
+Astro discovers and executes `pipeline.py` from the directory you pass to `-C` / `--pipeline-dir` (default: current directory). That module is arbitrary Python running as your user, with the same file and network access as any other Python process you start. **Only run Astro against pipeline repositories you trust.**

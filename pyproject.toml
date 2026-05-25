@@ -54,7 +54,7 @@ docs = [
 
 [project.urls]
 Homepage = "https://github.com/starlincs/astro"
-Documentation = "https://astro.readthedocs.io"
+Documentation = "https://astro-pipeline.readthedocs.io"
 Repository = "https://github.com/starlincs/astro"
 Issues = "https://github.com/starlincs/astro/issues"
 Changelog = "https://github.com/starlincs/astro/blob/main/CHANGELOG.md"

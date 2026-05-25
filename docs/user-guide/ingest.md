@@ -1,6 +1,6 @@
 # Ingest
 
-`astro ingest SOURCE_DIR` creates a new pipeline run under `.working/{run_id}/`.
+`astro ingest SOURCE_DIR` creates a new pipeline run under `.working/{run_id}/`. `SOURCE_DIR` must be a directory containing one or more CSV source files.
 
 ## Run directory after ingest
 
@@ -15,7 +15,7 @@
 
 ## Ingest behaviour
 
-1. Validate `SOURCE_DIR` contains exactly the expected files (no extras, no subdirectories)
+1. Validate `SOURCE_DIR` contains exactly the expected CSV files (no extras, no subdirectories)
 2. Validate each CSV against its Pandera schema
 3. Write Parquet files to `.working/{run_id}/ingested/`
 4. Record run and file statistics in `.astro/stats.db`
@@ -40,6 +40,8 @@ IngestFileSpec(
 ```
 
 CSV dtypes are derived from the Pandera schema to avoid loading all columns as strings.
+
+`name` values must be unique across the pipeline. Names must start with an alphanumeric character and may contain letters, numbers, `.`, `_`, and `-`. Set `column_names` when `has_header=False`; Astro uses those names with the Pandera schema when reading headerless CSVs.
 
 ## Execution modes
 

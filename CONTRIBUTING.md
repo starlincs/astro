@@ -4,7 +4,7 @@ Thank you for your interest in contributing.
 
 The **canonical contributing guide** lives in the documentation site:
 
-**[https://astro.readthedocs.io/en/latest/contributing/index.html](https://astro.readthedocs.io/en/latest/contributing/index.html)**
+**[https://astro-pipeline.readthedocs.io/en/latest/contributing/index.html](https://astro-pipeline.readthedocs.io/en/latest/contributing/index.html)**
 
 Source files are under [`docs/contributing/`](docs/contributing/).
 

@@ -70,7 +70,13 @@ source/
   edubase_sample.csv
 ```
 
-The CSV must match the Pandera schema declared in `ingest_files`.
+```csv
+URN,EstablishmentName
+100001,Open Example School
+100002,Closed Example School
+```
+
+The source path passed to `astro ingest` must be a directory. The directory must contain exactly the CSV files expected by `ingest_files`; unexpected files and subdirectories fail validation.
 
 ## 3. Ingest source files
 
@@ -127,6 +133,8 @@ List stored runs:
 ```bash
 astro list
 ```
+
+The copied output contains the rows left after the filter step. The removed rows are kept under `filtered/` for audit.
 
 ## Next steps
 

@@ -55,7 +55,7 @@ Quarantine Parquet rows use the source file schema plus `_astro_quarantine_reaso
 
 ## Retry
 
-Re-run `astro run` against a `quarantined` run. For each quarantined step only:
+Re-run `astro run` against a `quarantined` run, or a `failed` run that has quarantined steps. For each quarantined step only:
 
 1. Truncate the step quarantine file(s)
 2. Merge snapshot input with quarantined rows back into the file's `active_path`

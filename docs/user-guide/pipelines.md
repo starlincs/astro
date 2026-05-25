@@ -18,6 +18,8 @@ When Astro runs in a directory containing `pipeline.py`, it discovers and loads 
 | `ingest_batch_size` | CSV rows per batch during large-file ingest (default 100,000) |
 | `run_batch_size` | Parquet rows per batch during filter steps and `iter_batches()` (default 100,000) |
 
+Each `IngestFileSpec.name` must be unique and start with an alphanumeric character. It may contain letters, numbers, `.`, `_`, and `-`.
+
 ### Step registration
 
 Register steps in `configure_steps()`:
@@ -26,6 +28,8 @@ Register steps in `configure_steps()`:
 - `add_filter(label, fn, files, depends_on=[...])` — declarative row filter
 
 Each step references one or more `AstroFileSpec` subclasses. Each source file may have a different schema.
+
+Astro pipeline authors register steps with `add_step()` and `add_filter()`. The older `Pipeline.run()` style is not used for CLI pipelines.
 
 ## Example pipeline
 
