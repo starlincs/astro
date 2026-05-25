@@ -1,22 +1,32 @@
+<p align="center">
+  <img src="docs/banner.png" alt="Astro pipeline" width="100%">
+</p>
+
 # Astro
 
 CLI tool and library for CSV import pipelines.
 
 ## Documentation
 
-Full documentation is hosted at **[https://astro.readthedocs.io](https://astro.readthedocs.io)**.
+Full guides, API reference, and contributing docs are at **[https://astro.readthedocs.io](https://astro.readthedocs.io)**.
 
-Build locally with `pip install -e ".[docs]"` and `make docs`.
+Build locally: `pip install -e ".[docs]"` and `make docs`.
+
+| Topic | Where to read |
+|-------|---------------|
+| Install and quickstart | [docs/getting-started/](docs/getting-started/) |
+| Pipeline authoring | [docs/user-guide/pipelines.md](docs/user-guide/pipelines.md) |
+| CLI reference | [docs/user-guide/cli.md](docs/user-guide/cli.md) |
+| Contributing | [docs/contributing/](docs/contributing/) |
+| Behavioural spec (implementers) | [SPEC.md](SPEC.md) |
 
 ## Install
-
-From PyPI:
 
 ```bash
 pip install astro-pipeline
 ```
 
-The package installs the `astro` CLI and Python module. PyPI name is `astro-pipeline` because `astro` is already taken.
+PyPI name is `astro-pipeline` because `astro` is already taken. The CLI and import name remain `astro`.
 
 From source:
 
@@ -30,61 +40,27 @@ pip install -e ".[dev]"
 
 Astro ingests CSV directories into validated Parquet snapshots, then runs ordered pipeline steps with statistics, filtering, and row quarantine. Each pipeline lives in an external repository as a `pipeline.py` file.
 
-```text
-External repo (pipeline.py)  →  astro ingest  →  .working/{run_id}/ingested/
-                              →  astro run     →  processed outputs + stats
-```
-
-## Usage
-
 ```bash
-astro --help
 astro ingest path/to/data/
 astro run
-astro run --mode cli
-astro run --run-id abc12
 astro describe
 astro list
-astro cleanup --dry-run
-astro cleanup --yes
 ```
 
-`astro ingest` prints logs to the console and writes them to `.working/{run_id}/astro.log`. `astro run` executes registered pipeline steps; it uses a Rich dashboard by default (`--mode cli` for plain log output). Set `step_execution_mode = StepExecutionMode.PARALLEL` on a pipeline to run independent steps concurrently (subject to `depends_on` and shared-file locking). Large files (≥100MB by default) use batched ingest, filter, and quarantine I/O; steps can also use `file.scan()` and `file.sink()` for lazy transforms. Steps use `AstroFileSpec` / `AstroFile` containers with explicit output paths. Use `add_filter` for declarative row filtering; re-run `astro run` against a `quarantined` run to merge quarantined rows back and retry only the affected steps. Record custom metrics from steps via `ctx.stats`.
+See the [quickstart](docs/getting-started/quickstart.md) and [CLI reference](docs/user-guide/cli.md) for full usage, including cleanup, quarantine retry, and large-file behaviour.
 
-**Filter caveat:** filter steps split rows using joins on all columns. Identical duplicate rows may not partition cleanly if the filter returns fewer copies than exist in the input.
+## Security
 
-Pipeline repos define a `pipeline.py` that imports Astro and exports a `pipeline` instance. Run Astro from that directory (or pass `-C`).
-
-See [SPEC.md](SPEC.md) for the full behavioural specification (for implementers). User-facing guides live in [docs/](docs/). A runnable example is in [examples/](examples/).
-
-## Security model
-
-Astro loads and executes `pipeline.py` from the working directory you point it at. Only run Astro against pipeline repositories you trust. Pipeline code runs with your user permissions and can read and write files under the pipeline directory.
+Astro loads and executes `pipeline.py` from the directory you point it at. Only run Astro against pipeline repositories you trust. See the [security model](docs/getting-started/introduction.md#security-model) in the docs.
 
 ## Development
 
 ```bash
-make check          # lint + format + typecheck + tests
-make cov            # include large-file integration tests
-make fix            # auto-fix lint and format issues
-pre-commit install  # optional: run hooks on commit
-pre-commit run -a   # run all hooks manually
+make check    # lint + format + typecheck + tests
+make cov      # include large-file integration tests
 ```
 
-Optional pre-push hook:
-
-```bash
-pre-commit install --hook-type pre-push
-```
-
-## Project layout
-
-```text
-src/astro/     Library and CLI
-tests/         pytest suite
-examples/      Sample pipeline.py
-docs/          Sphinx documentation source
-```
+See [docs/contributing/](docs/contributing/) for the test-first workflow and release process.
 
 ## License
 

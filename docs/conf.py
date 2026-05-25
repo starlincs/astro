@@ -37,6 +37,70 @@ root_doc = "index"
 
 html_theme = "furo"
 html_static_path = ["_static"]
+html_css_files = ["custom.css"]
+html_title = "Astro pipeline"
+
+# Brand palette:
+#   brand-bg          #F2EFE0
+#   brand-bg-alt      #F0E8D8
+#   brand-primary     #4AA4B6
+#   brand-primary-2   #90D0D8
+#   brand-accent      #F85800
+#   brand-accent-2    #F87818
+#   brand-text        #182028
+#   brand-text-strong #101820
+html_theme_options = {
+    "light_logo": "logo.png",
+    "dark_logo": "logo.png",
+    "light_css_variables": {
+        "color-brand-primary": "#4AA4B6",
+        "color-brand-content": "#4AA4B6",
+        "color-brand-visited": "#F85800",
+        "color-foreground-primary": "#101820",
+        "color-foreground-secondary": "#182028",
+        "color-foreground-muted": "#182028",
+        "color-foreground-border": "#90D0D8",
+        "color-background-primary": "#F2EFE0",
+        "color-background-secondary": "#F2EFE0",
+        "color-background-hover": "#F0E8D8",
+        "color-background-border": "#90D0D8",
+        "color-sidebar-link-text--top-level": "#4AA4B6",
+        "color-toc-item-text--active": "#4AA4B6",
+        "color-highlighted-background": "#90D0D8",
+        "color-inline-code-background": "#F0E8D8",
+        "color-link--hover": "#F87818",
+        "color-link-underline": "transparent",
+        "color-link-underline--hover": "transparent",
+        "color-link-underline--visited": "transparent",
+        "color-link-underline--visited--hover": "transparent",
+        "color-header-background": "#F2EFE0",
+        "color-header-border": "#90D0D8",
+    },
+    "dark_css_variables": {
+        "color-brand-primary": "#4AA4B6",
+        "color-brand-content": "#4AA4B6",
+        "color-brand-visited": "#F87818",
+        "color-foreground-primary": "#E8E8D8",
+        "color-foreground-secondary": "#F0E8D8",
+        "color-foreground-muted": "#90D0D8",
+        "color-foreground-border": "#10B0D8",
+        "color-background-primary": "#101820",
+        "color-background-secondary": "#182028",
+        "color-background-hover": "#182028",
+        "color-background-border": "#10B0D8",
+        "color-sidebar-link-text--top-level": "#4AA4B6",
+        "color-toc-item-text--active": "#4AA4B6",
+        "color-highlighted-background": "#182028",
+        "color-inline-code-background": "#182028",
+        "color-link--hover": "#F87818",
+        "color-link-underline": "transparent",
+        "color-link-underline--hover": "transparent",
+        "color-link-underline--visited": "transparent",
+        "color-link-underline--visited--hover": "transparent",
+        "color-header-background": "#101820",
+        "color-header-border": "#10B0D8",
+    },
+}
 
 myst_heading_anchors = 3
 

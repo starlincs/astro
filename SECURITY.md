@@ -4,7 +4,7 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.1.x   | :white_check_mark: |
+| 1.0.x   | :white_check_mark: |
 
 ## Reporting a vulnerability
 
@@ -24,4 +24,4 @@ We aim to acknowledge reports within 72 hours and provide a fix or mitigation pl
 
 ## Security model
 
-Astro executes arbitrary Python from a `pipeline.py` file in the working directory. Only run Astro against pipeline repositories you trust. See the [security model](docs/getting-started/introduction.md#security-model) in the documentation for details.
+Astro executes arbitrary Python from a `pipeline.py` file in the working directory. Only run Astro against pipeline repositories you trust. See the [security model](https://astro.readthedocs.io/en/latest/getting-started/introduction.html#security-model) in the documentation for details.

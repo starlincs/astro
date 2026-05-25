@@ -2,6 +2,21 @@
 
 User-facing documentation lives in `docs/` and is built with Sphinx and MyST (Markdown).
 
+## Root markdown vs `docs/`
+
+Keep a single source of truth for each audience:
+
+| Content | Write it here | Not here |
+|---------|---------------|----------|
+| Install, guides, API reference | `docs/` | `README.md` (link only) |
+| GitHub landing summary | `README.md` | `docs/` |
+| Contributing workflow | `docs/contributing/` | `CONTRIBUTING.md` (pointer only) |
+| Behavioural contract | `SPEC.md` | User guide pages |
+| Vulnerability reporting | `SECURITY.md` | — |
+| Release notes | `CHANGELOG.md` | — |
+
+`README.md` and `CONTRIBUTING.md` stay short and link into the docs site. Avoid copying CLI tables, workflow steps, or guide prose into root files.
+
 ## Build locally
 
 ```bash
@@ -55,9 +70,10 @@ The repository includes `.readthedocs.yaml` for automated builds.
 
 RTD installs the package and docs dependencies so autodoc can import Polars and Pandera-dependent modules.
 
-## Relationship to SPEC.md
+## Relationship to other docs
 
 - **`docs/`** — user-facing documentation (installation, guides, API reference)
 - **`SPEC.md`** — behavioural specification for implementers and agents
+- **`README.md` / `CONTRIBUTING.md`** — short GitHub entry points that link here
 
-When adding or changing features, update both. The contributing guide in `docs/contributing/index.md` explains this relationship.
+When adding or changing features, update the relevant `docs/` page and `SPEC.md`. See {doc}`index` for the full file layout.

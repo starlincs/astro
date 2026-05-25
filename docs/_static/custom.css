@@ -1,0 +1,30 @@
+/* Brand accent hover states and link styling. */
+
+body[data-theme="light"] a,
+body:not([data-theme]) a,
+body[data-theme="dark"] a {
+  text-decoration: none;
+}
+
+body[data-theme="light"] a:hover,
+body:not([data-theme]) a:hover {
+  color: #f87818;
+  text-decoration: none;
+}
+
+body[data-theme="light"] .sidebar-tree .reference:hover,
+body:not([data-theme]) .sidebar-tree .reference:hover {
+  color: #f85800;
+  text-decoration: none;
+}
+
+body[data-theme="light"] .toc-tree a.scroll-current,
+body:not([data-theme]) .toc-tree a.scroll-current {
+  color: #f85800;
+  text-decoration: none;
+}
+
+body[data-theme="dark"] a:hover {
+  color: #f87818;
+  text-decoration: none;
+}

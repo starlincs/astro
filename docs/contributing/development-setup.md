@@ -8,7 +8,7 @@
 ## Install
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/starlincs/astro.git
 cd astro
 pip install -e ".[dev]"
 ```

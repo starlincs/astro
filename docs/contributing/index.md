@@ -4,11 +4,23 @@ Thank you for contributing to Astro. This guide covers development setup, testin
 
 ## Source of truth
 
-- **User documentation** — `docs/` (built with Sphinx, hosted on Read the Docs)
-- **Behavioural specification** — `SPEC.md` (implementation contract for developers and agents)
-- **Agent instructions** — `AGENTS.md` (coding agent workflow)
+| Audience | Location |
+|----------|----------|
+| End users | `docs/` (built with Sphinx, hosted on [Read the Docs](https://astro.readthedocs.io)) |
+| Implementers and agents | [`SPEC.md`](https://github.com/starlincs/astro/blob/main/SPEC.md) |
+| Coding agents | [`AGENTS.md`](https://github.com/starlincs/astro/blob/main/AGENTS.md) |
 
-When you change behaviour, update `SPEC.md` and the relevant user guide pages in `docs/`. Keep them in sync.
+Root-level markdown files exist for GitHub and tooling, not as a second copy of the user guides:
+
+| Root file | Role |
+|-----------|------|
+| [`README.md`](https://github.com/starlincs/astro/blob/main/README.md) | Repository landing page — brief overview and links into `docs/` |
+| [`CONTRIBUTING.md`](https://github.com/starlincs/astro/blob/main/CONTRIBUTING.md) | GitHub contributing entry point — points here |
+| [`SECURITY.md`](https://github.com/starlincs/astro/blob/main/SECURITY.md) | GitHub security policy and vulnerability reporting |
+| [`CHANGELOG.md`](https://github.com/starlincs/astro/blob/main/CHANGELOG.md) | Release notes |
+| [`CODE_OF_CONDUCT.md`](https://github.com/starlincs/astro/blob/main/CODE_OF_CONDUCT.md) | Community standards |
+
+When you change behaviour, update the relevant page in `docs/` and `SPEC.md`. Do not duplicate long-form guides in root markdown files.
 
 ## Quality bar
 

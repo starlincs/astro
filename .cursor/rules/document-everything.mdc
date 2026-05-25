@@ -24,11 +24,11 @@ Update documentation for any change that affects:
 |-------------|--------|
 | User-facing behaviour | Relevant page in `docs/user-guide/` or `docs/getting-started/` |
 | Behavioural contract | `SPEC.md` (clarifications only unless approved) |
-| CLI surface | `docs/user-guide/cli.md` and `README.md` usage section |
+| CLI surface | `docs/user-guide/cli.md` (canonical); `README.md` only for a brief command list |
 | Public API | Docstrings in `src/astro/` and `docs/api/index.md` if exports change |
 | Examples | `examples/` and `examples/README.md` |
 | User-visible release | `CHANGELOG.md` |
-| Contributor workflow | `docs/contributing/` and `AGENTS.md` when process changes |
+| Contributor workflow | `docs/contributing/` (canonical); `CONTRIBUTING.md` and `AGENTS.md` stay short |
 
 ## Workflow
 
@@ -44,7 +44,8 @@ Update documentation for any change that affects:
 - [ ] User guide reflects the new or changed behaviour
 - [ ] `SPEC.md` matches implementation (or only clarifies existing intent)
 - [ ] `CHANGELOG.md` updated for user-visible changes
-- [ ] `README.md` updated when install, usage, or security model changes
+- [ ] `README.md` updated only when install links or high-level overview need changing (not long-form guides)
+- [ ] Root markdown files (`README.md`, `CONTRIBUTING.md`) link to `docs/` rather than duplicating guide content
 - [ ] Public API docstrings present for new or changed exports
 - [ ] No stale "stub", "not implemented", or outdated version references remain
 
@@ -55,4 +56,4 @@ Adding `astro cleanup --dry-run`:
 1. Add test in `tests/cli/test_commands.py`
 2. Implement in `src/astro/cli/main.py`
 3. Update `docs/user-guide/cli.md`, `SPEC.md` CLI table, and `CHANGELOG.md`
-4. Update `README.md` if the example command list should show the new flag
+4. Add the flag to the brief command list in `README.md` only if it is a primary workflow command
