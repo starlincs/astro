@@ -8,7 +8,7 @@ CLI tool and library for CSV import pipelines.
 
 ## Documentation
 
-Full guides, API reference, and contributing docs are at **[https://astro.readthedocs.io](https://astro.readthedocs.io)**.
+Full guides, API reference, and contributing docs are at **[https://astro-pipeline.readthedocs.io](https://astro-pipeline.readthedocs.io)**.
 
 Build locally: `pip install -e ".[docs]"` and `make docs`.
 
