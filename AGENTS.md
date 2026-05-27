@@ -49,3 +49,12 @@ Mark slow or fixture-heavy tests with `@pytest.mark.integration`.
 ## Pre-commit hooks
 
 Hooks run ruff, ty, and hygiene checks. Full pytest runs via `make check`, not pre-commit (too slow). An optional pre-push hook can run `make test`.
+
+## Cursor Cloud specific instructions
+
+- **Virtual environment required for `ty`:** Packages must be installed inside a `.venv` at the workspace root. The `ty` type checker only resolves third-party imports from the venv's `site-packages`; user-level installs (`~/.local/`) are not searched. The update script handles venv creation and `pip install -e ".[dev]"`.
+- **Activate before running commands:** Always run `. .venv/bin/activate` (or use `.venv/bin/` prefixed binaries) before `make check`, `pytest`, `astro`, `ruff`, or `ty`.
+- **`python3.12-venv` apt package:** Required to create the venv. The update script installs it if missing.
+- **No external services:** Astro is fully local — no Docker, databases, or network services needed. SQLite is stdlib. All tests use `tmp_path` fixtures.
+- **Quality gate:** `make check` runs `ruff check`, `ruff format --check`, `ty check`, and `pytest` (with 80% coverage minimum). See `Makefile` for individual targets and `README.md` for the brief command list.
+- **Example pipeline:** `examples/` contains a runnable pipeline. See `examples/README.md` for the hello-world walkthrough (`astro ingest`, `astro run`, `astro describe`, `astro list`, `astro cleanup`).
