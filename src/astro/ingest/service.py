@@ -109,11 +109,11 @@ class IngestService:
                 )
         except IngestValidationError as error:
             logger.error("Ingest validation failed: %s", error, exc_info=True)
-            self._mark_failed(run_directory)
+            self._discard_failed_ingest(run_directory, manifest.run_id)
             raise
         except Exception as error:
             logger.error("Ingest failed: %s", error, exc_info=True)
-            self._mark_failed(run_directory)
+            self._discard_failed_ingest(run_directory, manifest.run_id)
             raise
 
         ingested_at = datetime.now(UTC)
@@ -150,16 +150,6 @@ class IngestService:
             ingested_files=[record.name for record in manifest.ingested_files],
         )
 
-    def _mark_failed(self, run_directory: Path) -> None:
-        manifest = self.run_manager.load_manifest(run_directory)
-        manifest.status = RunStatus.FAILED
-        self.run_manager.save_manifest(run_directory, manifest)
-        self.store.record_run(
-            run_id=manifest.run_id,
-            pipeline_name=manifest.pipeline_name,
-            status=manifest.status.value,
-            source_directory=manifest.source_directory,
-            created_at=manifest.created_at,
-            ingested_at=manifest.ingested_at,
-        )
-        StatisticsRecorder(manifest.run_id, self.store).record_run("ingest_failed", 1)
+    def _discard_failed_ingest(self, run_directory: Path, run_id: str) -> None:
+        self.run_manager.discard_run(run_directory)
+        self.store.delete_run(run_id)

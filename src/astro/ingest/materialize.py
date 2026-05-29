@@ -26,6 +26,12 @@ class MaterializedIngestFile:
     record: IngestedFileRecord
 
 
+def _load_dataframe(source_path: Path, spec: IngestFileSpec) -> pl.DataFrame:
+    if spec.preprocess is not None:
+        return spec.preprocess(source_path)
+    return _read_csv_eager(source_path, spec)
+
+
 def _read_csv_eager(source_path: Path, spec: IngestFileSpec) -> pl.DataFrame:
     encoding = polars_encoding(spec.encoding)
     schema_overrides = pandera_schema_overrides(spec.schema)
@@ -52,7 +58,7 @@ def _materialize_eager(
     *,
     ingest_directory: Path,
 ) -> MaterializedIngestFile:
-    dataframe = _read_csv_eager(source_path, spec)
+    dataframe = _load_dataframe(source_path, spec)
     validated = spec.schema.validate(dataframe)
     parquet_path = ingest_directory / f"{spec.name}.parquet"
     validated.write_parquet(parquet_path)
@@ -128,7 +134,7 @@ def materialize_ingest_file(
     spec = matched_file.spec
     source_size_bytes = source_path.stat().st_size
 
-    if source_size_bytes >= large_file_threshold_bytes:
+    if spec.preprocess is None and source_size_bytes >= large_file_threshold_bytes:
         return _materialize_batched(
             source_path,
             spec,

@@ -88,7 +88,7 @@ astro ingest path/to/source/
 
 Astro will:
 
-1. Validate the source directory contains exactly the expected files
+1. Match source files to the pipeline's declared ingest specs (required files must be present; at least one file must match)
 2. Validate each CSV against its Pandera schema
 3. Write Parquet files to `.working/{run_id}/ingested/`
 4. Record statistics in `.astro/stats.db`

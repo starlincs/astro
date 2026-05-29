@@ -43,7 +43,6 @@ def step_transform(ctx: StepContext, files: list[AstroFile]) -> None:
 |-------|-------|--------|---------------|
 | Ingest | file | `row_count`, `column_count`, `source_size_bytes` | After each file materializes |
 | Ingest | run | `files_ingested` | After successful ingest |
-| Ingest | run | `ingest_failed` | On ingest failure |
 | Run | step | `duration_ms` | After each step executes |
 | Run | step | `rows_quarantined` | When a step quarantines rows |
 | Run | file | `rows_filtered`, `rows_kept` | After a filter step processes a file |

@@ -39,7 +39,7 @@ pipeline_dir/
 
 Tracks run status (`ingested`, `completed`, `quarantined`, `failed`), ingested file records, and per-step state in `step_states`.
 
-Each step record includes `step_id`, `status` (`pending`, `complete`, `quarantined`, `failed`, `blocked`), and optional `detail`.
+Each step record includes `step_id`, `status` (`pending`, `complete`, `quarantined`, `failed`, `blocked`, `skipped`), and optional `detail`.
 
 ## Run IDs
 

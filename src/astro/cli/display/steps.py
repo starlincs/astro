@@ -18,6 +18,7 @@ class StepStatus(StrEnum):
     FAILED = "failed"
     WARNING = "warning"
     QUARANTINED = "quarantined"
+    SKIPPED = "skipped"
 
 
 @dataclass
@@ -68,6 +69,12 @@ class StepTracker:
         if detail is not None:
             step.detail = detail
 
+    def mark_skipped(self, step_id: str, *, detail: str | None = None) -> None:
+        step = self.get_step(step_id)
+        step.status = StepStatus.SKIPPED
+        if detail is not None:
+            step.detail = detail
+
     def set_status(self, step_id: str, status: StepStatus, *, detail: str | None = None) -> None:
         step = self.get_step(step_id)
         step.status = status
@@ -88,6 +95,7 @@ def _map_step_run_status(status: StepRunStatus) -> StepStatus:
         StepRunStatus.QUARANTINED: StepStatus.QUARANTINED,
         StepRunStatus.FAILED: StepStatus.FAILED,
         StepRunStatus.BLOCKED: StepStatus.FAILED,
+        StepRunStatus.SKIPPED: StepStatus.SKIPPED,
     }
     return mapping[status]
 

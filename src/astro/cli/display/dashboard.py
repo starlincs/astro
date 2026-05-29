@@ -27,6 +27,7 @@ _STATUS_ICONS = {
     StepStatus.FAILED: ("✗", "red"),
     StepStatus.WARNING: ("!", "yellow"),
     StepStatus.QUARANTINED: ("!", "yellow"),
+    StepStatus.SKIPPED: ("-", "dim"),
 }
 
 

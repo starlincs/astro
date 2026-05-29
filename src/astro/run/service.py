@@ -19,6 +19,11 @@ from astro.pipeline.steps import StepContext, StepDefinition
 from astro.quarantine.collector import StepQuarantine
 from astro.quarantine.store import QuarantineStore
 from astro.run.context import RunExecutionContext, RunProgress, StepExecutionOutcome
+from astro.run.optional import (
+    StepOptionalAction,
+    classify_step_for_optional_ingests,
+    optional_ingest_names,
+)
 from astro.stats.recorder import StatisticsRecorder
 from astro.storage.sqlite import PipelineStore
 from astro.working.manifest import RunManifest, RunStatus, StepRunStatus
@@ -63,6 +68,7 @@ class RunService:
         run_manager = RunManager(pipeline_dir)
         store = PipelineStore(pipeline_dir / ".astro" / "stats.db")
         stats_recorder = StatisticsRecorder(manifest.run_id, store)
+        self._initialize_step_states(pipeline, manifest)
         active_tracker = tracker or build_run_tracker(pipeline, manifest)
         file_pool = self._hydrate_files(pipeline, manifest, run_directory)
         quarantine_store = QuarantineStore(run_directory)
@@ -79,8 +85,6 @@ class RunService:
             active_tracker.set_progress_percent(progress_percent)
             if progress_callback is not None:
                 progress_callback()
-
-        self._initialize_step_states(pipeline, manifest)
 
         file_locks = {ingest_name: threading.Lock() for ingest_name in file_pool}
         ctx = RunExecutionContext(
@@ -145,7 +149,7 @@ class RunService:
                 break
 
             current_status = ctx.manifest.step_status_map().get(step.step_id, StepRunStatus.PENDING)
-            if current_status == StepRunStatus.COMPLETE:
+            if current_status in {StepRunStatus.COMPLETE, StepRunStatus.SKIPPED}:
                 continue
             if ctx.is_retry and current_status not in {
                 StepRunStatus.QUARANTINED,
@@ -178,6 +182,16 @@ class RunService:
 
     def execute_step(self, step: StepDefinition, ctx: RunExecutionContext) -> StepExecutionOutcome:
         current_status = ctx.manifest.step_status_map().get(step.step_id, StepRunStatus.PENDING)
+        if current_status == StepRunStatus.SKIPPED:
+            return StepExecutionOutcome(step_id=step.step_id)
+
+        optional_outcome = classify_step_for_optional_ingests(step, ctx.pipeline, ctx.manifest)
+        if optional_outcome.action == StepOptionalAction.SKIP:
+            return self._skip_step(step, ctx, detail=optional_outcome.detail)
+        if optional_outcome.action == StepOptionalAction.FAIL:
+            assert optional_outcome.error is not None
+            return self._fail_step(step, ctx, optional_outcome.error)
+
         step_files = [
             self._resolve_step_file(
                 file_spec,
@@ -289,6 +303,49 @@ class RunService:
             steps_completed_delta=0 if quarantine.has_quarantined_rows else 1,
         )
 
+    def _skip_step(
+        self,
+        step: StepDefinition,
+        ctx: RunExecutionContext,
+        *,
+        detail: str | None,
+    ) -> StepExecutionOutcome:
+        logger.info("Skipping step %s: %s", step.label, detail)
+        with ctx.state_lock:
+            ctx.manifest.upsert_step_state(step.step_id, StepRunStatus.SKIPPED, detail=detail)
+            ctx.active_tracker.mark_skipped(step.step_id, detail=detail)
+            ctx.active_tracker.set_status_message(detail or f"Skipped: {step.label}")
+            self._persist_manifest(
+                ctx.run_manager,
+                ctx.store,
+                ctx.run_directory,
+                ctx.manifest,
+                self._derive_run_status(ctx.manifest),
+            )
+            if ctx.progress_callback is not None:
+                ctx.progress_callback()
+        return StepExecutionOutcome(step_id=step.step_id)
+
+    def _fail_step(
+        self,
+        step: StepDefinition,
+        ctx: RunExecutionContext,
+        error: ValueError,
+    ) -> StepExecutionOutcome:
+        logger.error("Run failed before step %s: %s", step.label, error)
+        with ctx.state_lock:
+            ctx.manifest.upsert_step_state(step.step_id, StepRunStatus.FAILED, detail=str(error))
+            ctx.active_tracker.mark_failed(step.step_id, detail=str(error))
+            ctx.active_tracker.set_status_message(f"Failed: {error}")
+            self._persist_manifest(
+                ctx.run_manager,
+                ctx.store,
+                ctx.run_directory,
+                ctx.manifest,
+                RunStatus.FAILED,
+            )
+        return StepExecutionOutcome(step_id=step.step_id, hard_error=error)
+
     def check_dependencies(self, step: StepDefinition, manifest: RunManifest) -> None:
         statuses = manifest.step_status_map()
         for dependency_id in step.depends_on:
@@ -297,7 +354,7 @@ class RunService:
                 raise DependencyQuarantinedError(
                     f"Step {step.step_id} blocked by quarantined dependency: {dependency_id}"
                 )
-            if dependency_status != StepRunStatus.COMPLETE:
+            if dependency_status not in {StepRunStatus.COMPLETE, StepRunStatus.SKIPPED}:
                 joined = ", ".join(step.depends_on)
                 raise RuntimeError(
                     f"Step {step.step_id} blocked by incomplete dependencies: {joined}"
@@ -318,7 +375,15 @@ class RunService:
         if manifest.step_states:
             return
         for step in pipeline.steps:
-            manifest.upsert_step_state(step.step_id, StepRunStatus.PENDING)
+            optional_outcome = classify_step_for_optional_ingests(step, pipeline, manifest)
+            if optional_outcome.action == StepOptionalAction.SKIP:
+                manifest.upsert_step_state(
+                    step.step_id,
+                    StepRunStatus.SKIPPED,
+                    detail=optional_outcome.detail,
+                )
+            else:
+                manifest.upsert_step_state(step.step_id, StepRunStatus.PENDING)
 
     def _capture_snapshots(
         self,
@@ -368,7 +433,9 @@ class RunService:
         statuses = list(manifest.step_status_map().values())
         if any(status == StepRunStatus.QUARANTINED for status in statuses):
             return RunStatus.QUARANTINED
-        if statuses and all(status == StepRunStatus.COMPLETE for status in statuses):
+        if statuses and all(
+            status in {StepRunStatus.COMPLETE, StepRunStatus.SKIPPED} for status in statuses
+        ):
             return RunStatus.COMPLETED
         if manifest.status == RunStatus.INGESTED:
             return RunStatus.INGESTED
@@ -400,6 +467,7 @@ class RunService:
         run_directory: Path,
     ) -> dict[str, AstroFile]:
         records_by_name = {record.name: record for record in manifest.ingested_files}
+        optional_names = optional_ingest_names(pipeline)
         file_pool: dict[str, AstroFile] = {}
 
         for step in pipeline.steps:
@@ -409,6 +477,8 @@ class RunService:
                     continue
                 record = records_by_name.get(ingest_name)
                 if record is None:
+                    if ingest_name in optional_names:
+                        continue
                     raise ValueError(f"Ingested file {ingest_name!r} is missing from run manifest.")
                 file_pool[ingest_name] = AstroFile.hydrate(
                     spec=file_spec,

@@ -129,11 +129,14 @@ class ExamplePipeline(Pipeline):
 
 ### Ingest behaviour
 
-1. Validate `SOURCE_DIR` is a directory containing exactly the expected CSV files (no extras, no subdirectories)
-2. Validate each CSV against its Pandera schema
-3. Write Parquet files to `.working/{run_id}/ingested/` (batched validation + append for files ≥ `large_file_threshold_bytes`)
-4. Record run and file statistics in `.astro/stats.db`
-5. Update `manifest.json` with status `ingested`
+1. Validate `SOURCE_DIR` is a flat directory of files (no subdirectories)
+2. Match source files to declared `ingest_files` specs (required specs must match exactly one file; optional specs may be absent; at least one file must match overall; no unmatched extras)
+3. Load each matched file via default CSV reading or an optional `preprocess` hook, then validate against its Pandera schema
+4. Write Parquet files to `.working/{run_id}/ingested/` (batched validation + append for files ≥ `large_file_threshold_bytes`; preprocess always uses the eager path)
+5. Record run and file statistics in `.astro/stats.db`
+6. Update `manifest.json` with status `ingested`
+
+If ingest fails for any reason, Astro removes the run directory under `.working/` (and any SQLite rows for that run) so serial pipelines can ingest again immediately. No `failed` ingest run is left behind.
 
 Large-file ingest reads CSVs in batches, validates each batch with Pandera, and appends to a single Parquet file via PyArrow. Small files use the eager path. CSV dtypes are derived from the Pandera schema to avoid loading all columns as strings.
 
@@ -223,10 +226,12 @@ def step_validate(_ctx: StepContext, files: list[AstroFile]) -> None:
 | Step finishes with quarantined rows | `quarantined` | (unchanged until end) | Continue to next step |
 | Step depends on a quarantined step | `blocked` (not started) | `failed` at that point | Stop run |
 | All runnable steps done, some quarantined | mixed | `quarantined` | Stop run (retryable) |
-| All steps complete, no quarantine | `complete` | `completed` | Done |
+| All steps complete or skipped, no quarantine | `complete` / `skipped` | `completed` | Done |
+| Step references absent optional ingest only | `skipped` | (unchanged until end) | Continue to next step |
+| Step mixes present ingests with absent optional ingest | `failed` | `failed` | Stop run |
 | Hard exception in step | `failed` | `failed` | Stop run |
 
-`manifest.json` stores per-step records in `step_states`: `step_id`, `status` (`pending`, `complete`, `quarantined`, `failed`, `blocked`), and optional `detail`.
+`manifest.json` stores per-step records in `step_states`: `step_id`, `status` (`pending`, `complete`, `quarantined`, `failed`, `blocked`, `skipped`), and optional `detail`.
 
 #### Retry
 
@@ -238,7 +243,7 @@ For each quarantined step only:
 2. Merge snapshot input with quarantined rows back into the file's `active_path`
 3. Re-run that step
 
-Previously completed steps are skipped. Previously blocked or pending dependent steps run once their dependencies are `complete`.
+Previously completed steps are skipped. Previously blocked or pending dependent steps run once their dependencies are `complete` or `skipped`.
 
 ### Row filtering
 
@@ -328,7 +333,6 @@ def step_transform(ctx: StepContext, files: list[AstroFile]) -> None:
 |-------|-------|--------|---------------|
 | Ingest | file | `row_count`, `column_count`, `source_size_bytes` | After each file materializes |
 | Ingest | run | `files_ingested` | After successful ingest |
-| Ingest | run | `ingest_failed` | On ingest failure |
 | Run | step | `duration_ms` | After each step executes |
 | Run | step | `rows_quarantined` | When a step quarantines rows |
 | Run | file | `rows_filtered`, `rows_kept` | After a filter step processes a file |

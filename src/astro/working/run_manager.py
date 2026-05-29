@@ -116,6 +116,10 @@ class RunManager:
     def ingest_directory_for(self, run_directory: Path) -> Path:
         return run_directory / INGESTED_DIRNAME
 
+    def discard_run(self, run_directory: Path) -> None:
+        """Remove a run directory and all contents."""
+        shutil.rmtree(run_directory, ignore_errors=True)
+
     def _generate_run_id(self) -> str:
         valid_characters = string.ascii_lowercase + string.digits
         for _ in range(100):

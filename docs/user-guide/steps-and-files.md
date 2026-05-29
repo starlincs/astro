@@ -29,6 +29,16 @@ Steps must write outputs explicitly. Validation-only steps may call `load()` and
 
 For large files, prefer `scan()` + `sink()` or `save_in_place_lazy()` over `load()`. See {doc}`large-files`.
 
+## Optional ingest files
+
+If an `IngestFileSpec` is declared with `optional=True` and no source file was ingested, run steps behave as follows:
+
+- Steps whose `AstroFileSpec` list references **only** that absent optional ingest are skipped.
+- Steps that reference both the absent optional ingest and a present ingest fail the run.
+- Skipped steps count as satisfied dependencies for `depends_on`.
+
+See {doc}`ingest` for ingest-time optional file rules and {doc}`running` for run outcomes.
+
 ## StepContext
 
 Each step receives a context with:

@@ -15,11 +15,16 @@
 
 ## Ingest behaviour
 
-1. Validate `SOURCE_DIR` contains exactly the expected CSV files (no extras, no subdirectories)
-2. Validate each CSV against its Pandera schema
-3. Write Parquet files to `.working/{run_id}/ingested/`
-4. Record run and file statistics in `.astro/stats.db`
-5. Update `manifest.json` with status `ingested`
+1. Validate `SOURCE_DIR` is a flat directory of files (no subdirectories)
+2. Match source files to declared `ingest_files` specs (required specs must match exactly one file; optional specs may be absent; at least one file must match overall; no unmatched extras)
+3. Load each matched file via default CSV reading or an optional `preprocess` hook, then validate against its Pandera schema
+4. Write Parquet files to `.working/{run_id}/ingested/` (batched validation + append for large CSV files ≥ `large_file_threshold_bytes`; preprocess always uses the eager path)
+5. Record run and file statistics in `.astro/stats.db`
+6. Update `manifest.json` with status `ingested`
+
+If ingest fails for any reason, Astro removes the run directory under `.working/` (and any SQLite rows for that run) so serial pipelines can ingest again immediately. No `failed` ingest run is left behind.
+
+Large-file ingest reads CSVs in batches, validates each batch with Pandera, and appends to a single Parquet file via PyArrow. Small files use the eager path. CSV dtypes are derived from the Pandera schema to avoid loading all columns as strings.
 
 ## IngestFileSpec
 
@@ -36,10 +41,14 @@ IngestFileSpec(
     encoding="utf-8",       # optional, default utf-8
     has_header=True,        # optional, default True
     column_names=None,      # required when has_header=False
+    preprocess=None,        # optional Callable[[Path], pl.DataFrame]; replaces CSV loading
+    optional=False,         # optional, default False; skip when no file matches
 )
 ```
 
-CSV dtypes are derived from the Pandera schema to avoid loading all columns as strings.
+CSV dtypes are derived from the Pandera schema to avoid loading all columns as strings. When `preprocess` is set, it is called with the matched source path and must return a `pl.DataFrame` that is then Pandera-validated and written to Parquet; `encoding`, `has_header`, and `column_names` are ignored. Preprocess always uses the eager materialization path regardless of file size.
+
+When `optional=True`, a missing source file is skipped rather than failing ingest. At least one ingest file (required or optional) must still match. During `astro run`, steps that reference only absent optional ingests are skipped automatically. Steps that mix present ingests with absent optional ingests fail the run — keep optional-only work in dedicated steps.
 
 `name` values must be unique across the pipeline. Names must start with an alphanumeric character and may contain letters, numbers, `.`, `_`, and `-`. Set `column_names` when `has_header=False`; Astro uses those names with the Pandera schema when reading headerless CSVs.
 

@@ -26,6 +26,7 @@ class StepRunStatus(StrEnum):
     QUARANTINED = "quarantined"
     FAILED = "failed"
     BLOCKED = "blocked"
+    SKIPPED = "skipped"
 
 
 class IngestedFileRecord(BaseModel):

@@ -141,7 +141,7 @@ class ParallelStepScheduler:
 
     def _should_skip_step(self, step: StepDefinition) -> bool:
         status = self._ctx.manifest.step_status_map().get(step.step_id, StepRunStatus.PENDING)
-        if status == StepRunStatus.COMPLETE:
+        if status in {StepRunStatus.COMPLETE, StepRunStatus.SKIPPED}:
             return True
         return bool(
             self._ctx.is_retry
@@ -166,7 +166,7 @@ class ParallelStepScheduler:
         statuses = self._ctx.manifest.step_status_map()
         for dependency_id in step.depends_on:
             dependency_status = statuses.get(dependency_id, StepRunStatus.PENDING)
-            if dependency_status != StepRunStatus.COMPLETE:
+            if dependency_status not in {StepRunStatus.COMPLETE, StepRunStatus.SKIPPED}:
                 return False
         return True
 
@@ -177,6 +177,7 @@ class ParallelStepScheduler:
             status = self._ctx.manifest.step_status_map().get(step.step_id, StepRunStatus.PENDING)
             if status not in {
                 StepRunStatus.COMPLETE,
+                StepRunStatus.SKIPPED,
                 StepRunStatus.QUARANTINED,
                 StepRunStatus.FAILED,
                 StepRunStatus.BLOCKED,

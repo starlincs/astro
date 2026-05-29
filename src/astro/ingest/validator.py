@@ -43,6 +43,8 @@ def match_ingest_files(
             if fnmatch.fnmatch(path.name, spec.source_pattern) and path not in matched_paths
         ]
         if not pattern_matches:
+            if spec.optional:
+                continue
             raise IngestValidationError(
                 f"No source file matched pattern {spec.source_pattern!r} for {spec.name!r}."
             )
@@ -55,6 +57,9 @@ def match_ingest_files(
         matched_path = pattern_matches[0]
         matched_paths.add(matched_path)
         matches.append(MatchedIngestFile(spec=spec, source_path=matched_path))
+
+    if not matches:
+        raise IngestValidationError("At least one ingest file must be matched.")
 
     unmatched_files = [path for path in source_files if path not in matched_paths]
     if unmatched_files:

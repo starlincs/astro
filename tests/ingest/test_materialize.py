@@ -95,3 +95,85 @@ def test_materialize_reads_headerless_csv_with_column_names(tmp_path: Path) -> N
     loaded = pl.read_parquet(materialized.record.parquet_path)
     assert loaded.columns == ["postcode", "post_town", "udprn"]
     assert loaded["postcode"][0] == "AB10 1AB"
+
+
+def test_materialize_uses_preprocess_before_pandera_validation(tmp_path: Path) -> None:
+    source_path = tmp_path / "ignored.txt"
+    source_path.write_text("not csv", encoding="utf-8")
+
+    def preprocess(_path: Path) -> pl.DataFrame:
+        return pl.DataFrame({"URN": ["100001"], "EstablishmentName": ["From preprocess"]})
+
+    spec = IngestFileSpec(
+        name="establishments",
+        source_pattern="ignored.txt",
+        schema=pa.DataFrameSchema(
+            {"URN": pa.Column(str), "EstablishmentName": pa.Column(str)},
+            strict="filter",
+        ),
+        preprocess=preprocess,
+    )
+    matched = MatchedIngestFile(spec=spec, source_path=source_path)
+    ingest_directory = tmp_path / "ingested"
+
+    materialized = materialize_ingest_file(matched, ingest_directory=ingest_directory)
+
+    loaded = pl.read_parquet(materialized.record.parquet_path)
+    assert loaded["EstablishmentName"][0] == "From preprocess"
+
+
+def test_materialize_preprocess_invalid_data_raises_pandera_error(tmp_path: Path) -> None:
+    source_path = tmp_path / "ignored.txt"
+    source_path.write_text("not csv", encoding="utf-8")
+
+    def preprocess(_path: Path) -> pl.DataFrame:
+        return pl.DataFrame({"WrongColumn": ["value"]})
+
+    spec = IngestFileSpec(
+        name="establishments",
+        source_pattern="ignored.txt",
+        schema=pa.DataFrameSchema({"URN": pa.Column(str)}, strict="filter"),
+        preprocess=preprocess,
+    )
+    matched = MatchedIngestFile(spec=spec, source_path=source_path)
+
+    with pytest.raises((SchemaError, SchemaErrors)):
+        materialize_ingest_file(matched, ingest_directory=tmp_path / "ingested")
+
+
+def test_materialize_preprocess_uses_eager_path_for_large_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_path = tmp_path / "large.bin"
+    source_path.write_bytes(b"x" * 200)
+
+    batched_called = {"value": False}
+
+    def fake_materialize_batched(*_args, **_kwargs):
+        batched_called["value"] = True
+        raise AssertionError("batched path should not be used when preprocess is set")
+
+    monkeypatch.setattr(
+        "astro.ingest.materialize._materialize_batched",
+        fake_materialize_batched,
+    )
+
+    def preprocess(_path: Path) -> pl.DataFrame:
+        return pl.DataFrame({"URN": ["1"]})
+
+    spec = IngestFileSpec(
+        name="establishments",
+        source_pattern="large.bin",
+        schema=pa.DataFrameSchema({"URN": pa.Column(str)}, strict="filter"),
+        preprocess=preprocess,
+    )
+    matched = MatchedIngestFile(spec=spec, source_path=source_path)
+
+    materialize_ingest_file(
+        matched,
+        ingest_directory=tmp_path / "ingested",
+        large_file_threshold_bytes=10,
+    )
+
+    assert batched_called["value"] is False
