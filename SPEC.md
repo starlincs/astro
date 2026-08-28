@@ -182,6 +182,8 @@ Log levels use standard semantics. WARNING lines render yellow and ERROR lines r
 
 By default, run steps execute **serially** in registration order (respecting `depends_on`). When a pipeline sets `step_execution_mode = StepExecutionMode.PARALLEL`, Astro dispatches ready steps to a thread pool: a step runs when all dependencies are `complete`, up to `max_parallel_workers` at a time. Steps that touch the same ingested file name are serialized with per-file locks to prevent corrupting shared Parquet snapshots. Parallel scheduling is intended for I/O-bound and Polars work; pure-Python CPU-bound steps will not scale due to the GIL.
 
+At the start of `astro run`, Astro resolves a data environment directory and exposes it on `StepContext.data_environment`. Resolution order: `DATA_ENV` process variable (absolute or relative to the pipeline directory), then `DATA_ENV` in `environment.local` beside `pipeline.py`, then `PAF_ENV` → `../../data/environments/<name>`, else `../../data/environments/dev`. Astro loads KEY=VALUE pairs from `<environment>/.env` without overriding existing process variables. Step authors use `data_environment.sqlite_db("pipeline")` and `data_environment.typesense_data_dir` for export and lookup paths.
+
 ### Row quarantine
 
 Steps may quarantine individual rows that fail business rules without aborting the whole step. Quarantined rows are persisted under the run directory and recorded in `manifest.json` step state.

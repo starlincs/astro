@@ -12,6 +12,10 @@ from datetime import date
 from pathlib import Path
 
 from astro.cli.display.steps import StepTracker, build_run_tracker
+from astro.config.environment import (
+    load_data_environment_env,
+    resolve_data_environment,
+)
 from astro.pipeline.base import Pipeline
 from astro.pipeline.files import AstroFile
 from astro.pipeline.models import StepExecutionMode
@@ -68,6 +72,8 @@ class RunService:
         run_manager = RunManager(pipeline_dir)
         store = PipelineStore(pipeline_dir / ".astro" / "stats.db")
         stats_recorder = StatisticsRecorder(manifest.run_id, store)
+        data_environment = resolve_data_environment(pipeline_dir)
+        load_data_environment_env(data_environment)
         self._initialize_step_states(pipeline, manifest)
         active_tracker = tracker or build_run_tracker(pipeline, manifest)
         file_pool = self._hydrate_files(pipeline, manifest, run_directory)
@@ -104,6 +110,7 @@ class RunService:
             progress_callback=progress_callback,
             run_started_at=run_started_at,
             file_locks=file_locks,
+            data_environment=data_environment,
         )
 
         if pipeline.step_execution_mode == StepExecutionMode.PARALLEL:
@@ -225,6 +232,7 @@ class RunService:
             report_progress=ctx.report_progress,
             quarantine=quarantine,
             stats=step_stats,
+            data_environment=ctx.data_environment,
         )
 
         ingest_names = sorted({file_spec.__class__.ingest_name for file_spec in step.file_specs})

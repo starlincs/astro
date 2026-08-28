@@ -66,6 +66,20 @@ Each step receives a context with:
 | `logger` | Step-scoped logger |
 | `quarantine` | Quarantine collector (see {doc}`quarantine`) |
 | `stats` | Statistics recorder (see {doc}`statistics`) |
+| `data_environment` | Resolved data environment paths and name (see below) |
+
+## Data environment
+
+At the start of `astro run`, Astro resolves a named data environment under `data/environments/<name>/` and exposes it on `StepContext.data_environment`. Use it in export or lookup steps for SQLite database paths (`sqlite_db("pipeline")`) and the Typesense data directory (`typesense_data_dir`).
+
+Resolution order:
+
+1. `DATA_ENV` process environment variable (absolute or relative to the pipeline directory)
+2. `DATA_ENV` in `environment.local` beside `pipeline.py`
+3. `PAF_ENV` process environment variable → `../../data/environments/<PAF_ENV>`
+4. Default → `../../data/environments/dev`
+
+When a data environment is resolved, Astro loads KEY=VALUE pairs from `<environment>/.env` into the process environment without overriding variables that are already set (for example Typesense connection settings).
 
 ## Example: validation step
 

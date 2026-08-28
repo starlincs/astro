@@ -10,6 +10,7 @@ from datetime import date
 from enum import StrEnum
 from pathlib import Path
 
+from astro.config.environment import DataEnvironment
 from astro.pipeline.files import AstroFile, AstroFileSpec
 from astro.quarantine.collector import StepQuarantine
 from astro.stats.recorder import StatisticsRecorder
@@ -51,6 +52,7 @@ class StepContext:
         report_progress: Callback to update dashboard progress.
         quarantine: Collector for quarantining invalid rows.
         stats: Recorder for run, file, and step statistics.
+        data_environment: Resolved starlincs data environment for runtime lookups.
     """
 
     pipeline_dir: Path
@@ -62,6 +64,7 @@ class StepContext:
     report_progress: ProgressCallback
     quarantine: StepQuarantine
     stats: StatisticsRecorder
+    data_environment: DataEnvironment
 
 
 def slugify_step_label(label: str) -> str:

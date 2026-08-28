@@ -8,6 +8,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from astro.config.environment import DataEnvironment
 from astro.filter.executor import FilterValidationError, apply_filter_step
 from astro.filter.store import FilterStore
 from astro.pipeline.files import AstroFile, AstroFileSpec
@@ -28,8 +29,14 @@ def _noop_progress(_value: float | None) -> None:
 
 
 def _build_context(tmp_path: Path, store: PipelineStore) -> StepContext:
+    pipeline_dir = tmp_path / "pipeline"
+    data_env = DataEnvironment(
+        root=pipeline_dir / "data-env",
+        env_file=pipeline_dir / "data-env" / ".env",
+        name="dev",
+    )
     return StepContext(
-        pipeline_dir=tmp_path / "pipeline",
+        pipeline_dir=pipeline_dir,
         run_directory=tmp_path / "run",
         run_id="abcde",
         run_date=datetime(2026, 5, 22, tzinfo=UTC).date(),
@@ -38,6 +45,7 @@ def _build_context(tmp_path: Path, store: PipelineStore) -> StepContext:
         report_progress=_noop_progress,
         quarantine=StepQuarantine(tmp_path / "run", "remove-closed"),
         stats=StatisticsRecorder("abcde", store, step_id="remove-closed"),
+        data_environment=data_env,
     )
 
 

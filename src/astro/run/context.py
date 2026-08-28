@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from astro.cli.display.steps import StepTracker
+from astro.config.environment import DataEnvironment
 from astro.pipeline.base import Pipeline
 from astro.pipeline.files import AstroFile
 from astro.quarantine.store import QuarantineStore
@@ -57,6 +58,7 @@ class RunExecutionContext:
     report_progress: Callable[[float | None], None]
     progress_callback: Callable[[], None] | None
     run_started_at: float
+    data_environment: DataEnvironment
     state_lock: threading.Lock = field(default_factory=threading.Lock)
     file_locks: dict[str, threading.Lock] = field(default_factory=dict)
     running_step_ids: set[str] = field(default_factory=set)
