@@ -29,6 +29,19 @@ Steps must write outputs explicitly. Validation-only steps may call `load()` and
 
 For large files, prefer `scan()` + `sink()` or `save_in_place_lazy()` over `load()`. See {doc}`large-files`.
 
+## Chunked export helpers
+
+For export steps that materialize many rows or documents outside Parquet (for example SQLite CSV imports or Typesense JSONL dumps), use the helpers in `astro.io`:
+
+| Symbol | Purpose |
+|--------|---------|
+| `CsvChunkWriter` | Write fixed-size CSV chunks with a stable column order |
+| `JsonlChunkWriter` | Write fixed-size JSONL document chunks |
+| `write_export_manifest` | Write a `manifest.json` beside exported chunk files |
+| `export_file_dicts` | Serialize `ExportFileEntry` metadata for manifest payloads |
+
+Each writer flushes when a chunk reaches `chunk_size`, names files `{prefix}-{index:05d}.{csv|jsonl}`, and returns totals plus per-file metadata from `finalize()`. Call `write_export_manifest` after export completes to record table or collection metadata alongside the chunk files.
+
 ## Optional ingest files
 
 If an `IngestFileSpec` is declared with `optional=True` and no source file was ingested, run steps behave as follows:
