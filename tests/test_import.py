@@ -11,7 +11,7 @@ from astro import (
 
 
 def test_package_version() -> None:
-    assert astro.__version__ == "1.0.0"
+    assert astro.__version__ == "1.1.0"
 
 
 def test_public_exports() -> None:

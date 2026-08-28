@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0](https://github.com/starlincs/astro/releases/tag/v1.1.0) - 2026-08-28
+
 ### Added
 
 - `astro.io` chunked export helpers — `CsvChunkWriter`, `JsonlChunkWriter`, `write_export_manifest`, and `ExportFileEntry` for pipeline steps that write SQLite-importable CSV or Typesense JSONL artifacts in fixed-size chunks
