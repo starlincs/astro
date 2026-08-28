@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
 
 import polars as pl
 
@@ -55,7 +54,7 @@ def apply_predicate_filter_step(
         if file.is_large_file():
             file.save_in_place_lazy(kept_lazy)
         else:
-            file.save_in_place(cast(pl.DataFrame, kept_lazy.collect()))
+            file.save_in_place(kept_lazy.collect())
 
         removed_count = parquet_row_count(filtered_path)
         kept_count = file.row_count()

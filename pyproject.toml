@@ -40,7 +40,7 @@ dev = [
     "pytest-cov>=6.0",
     "pytest>=8.0",
     "ruff>=0.4",
-    "ty>=0.0.1,<0.1",
+    "ty>=0.0.75,<0.1",
     "hypothesis>=6.0",
     "build>=1.0",
     "twine>=6.0",
@@ -86,6 +86,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "D101"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "--cov=astro --cov-report=term-missing --cov-fail-under=80 -m \"not large\""
 markers = [
     "integration: tests needing external fixtures or full pipeline dirs",

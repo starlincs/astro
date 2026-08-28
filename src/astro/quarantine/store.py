@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import cast
 
 import polars as pl
 
@@ -54,7 +53,7 @@ class QuarantineStore:
             return pl.DataFrame()
         if len(paths) == 1:
             return pl.read_parquet(paths[0])
-        return cast(pl.DataFrame, pl.scan_parquet(paths).collect(engine="streaming"))
+        return pl.scan_parquet(paths).collect(engine="streaming")
 
     def row_count(self, path: Path) -> int:
         return parquet_row_count_many(self.all_quarantine_paths(path))

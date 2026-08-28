@@ -8,6 +8,33 @@ Astro is published to PyPI as **`astro-pipeline`**. The import name and CLI rema
 - Hatch reads it via `[tool.hatch.version]` in `pyproject.toml`
 - Record user-visible changes in `CHANGELOG.md`
 
+## GitHub release notes
+
+Release notes are generated from `CHANGELOG.md` so PyPI, GitHub, and the changelog stay aligned.
+
+1. Move `[Unreleased]` entries into a new `## [X.Y.Z] - YYYY-MM-DD` section in `CHANGELOG.md`.
+2. Bump `__version__` in `src/astro/__init__.py` and update `tests/test_import.py`.
+3. Run `make check`, commit, tag, and push:
+
+```bash
+git tag v1.2.0
+git push origin main v1.2.0
+```
+
+4. Create or update the GitHub release from the changelog:
+
+```bash
+./scripts/create-github-release.sh 1.2.0
+```
+
+The script reads the matching changelog section and runs `gh release create` (or `gh release edit` if the release already exists). Preview notes only:
+
+```bash
+python scripts/extract_changelog.py 1.2.0
+```
+
+Requires the [`gh`](https://cli.github.com/) CLI authenticated against the repository.
+
 ## Build locally
 
 ```bash
@@ -59,10 +86,11 @@ The workflow in `.github/workflows/publish.yml` publishes on:
 
 ```bash
 git tag v1.0.0
-git push origin v1.0.0
+git push origin main v1.0.0
+./scripts/create-github-release.sh 1.0.0
 ```
 
-Or create a GitHub Release from the tag; either triggers the publish workflow.
+Pushing a `v*` tag triggers the publish workflow. The GitHub release step is separate and uses notes from `CHANGELOG.md`.
 
 ## After publishing
 
